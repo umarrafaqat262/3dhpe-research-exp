@@ -34,6 +34,19 @@ import math
 import numpy as np
 
 from lib.model.mambablocks import BiSTSSMBlock
+
+LIMBS = [[0,1], [1,2], [2,3], [0,4], [4,5], [5,6],
+         [0,7], [7,8], [8,9], [9,10], [8,11], [11,12], [12,13],
+         [8,14], [14,15], [15,16]]
+
+def _make_joint_to_limb(num_joints=17):
+    mat = torch.zeros(num_joints, len(LIMBS))
+    for j, (p, c) in enumerate(LIMBS):
+        mat[p, j] = 1.0
+        mat[c, j] = 1.0
+    counts = mat.sum(dim=1, keepdim=True).clamp(min=1)
+    return mat / counts
+
 class  PoseMamba(nn.Module):
     def __init__(self, num_frame=9, num_joints=17, in_chans=2, embed_dim_ratio=256, depth=6, mlp_ratio=2., drop_rate=0., drop_path_rate=0.2,  norm_layer=None):
         """    ##########hybrid_backbone=None, representation_size=None,
@@ -57,6 +70,8 @@ class  PoseMamba(nn.Module):
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
         embed_dim = embed_dim_ratio   #### temporal embed_dim is num_joints * spatial embedding dim ratio
         out_dim = 3     #### output dimension is num_joints * 3
+        self.in_chans = in_chans
+        self.register_buffer('joint_to_limb', _make_joint_to_limb(num_joints))
         self.Spatial_patch_to_embedding = nn.Linear(in_chans, embed_dim_ratio)
         self.Spatial_pos_embed = nn.Parameter(torch.zeros(1, num_joints, embed_dim_ratio))
         self.Temporal_pos_embed = nn.Parameter(torch.zeros(1, num_frame, embed_dim))
@@ -130,8 +145,19 @@ class  PoseMamba(nn.Module):
             x = self.Temporal_norm(x)
         return x
 
+    def compute_bone_features(self, x):
+        b, f, n, c = x.shape
+        xy = x[..., :2]
+        limbs = xy[:, :, LIMBS, :]
+        limb_vecs = limbs[:, :, :, 1, :] - limbs[:, :, :, 0, :]
+        bone_feats = torch.einsum('jn,btnd->btjd', self.joint_to_limb, limb_vecs)
+        return bone_feats
+
     def forward(self, x):
         b, f, n, c = x.shape
+        if self.in_chans == 5 and c == 3:
+            bone_feats = self.compute_bone_features(x)
+            x = torch.cat([x, bone_feats], dim=-1)
         x = self.STE_forward(x)
         x = self.TTE_foward(x)
         x = self.ST_foward(x)
