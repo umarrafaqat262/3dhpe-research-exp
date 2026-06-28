@@ -5,7 +5,7 @@ import errno
 import math
 import pickle
 import datetime
-import tensorboardX
+
 import torch.distributed
 from tqdm import tqdm
 import time
@@ -64,15 +64,33 @@ def save_checkpoint(chk_path, epoch, lr, optimizer, model_pos, min_loss, is_best
         artifact.add_file(chk_path)
         wandb.log_artifact(artifact)
     
-def evaluate(args, model_pos, test_loader, datareader):
+def evaluate(args, model_pos, test_loader, datareader, layer_hooks=None):
     log.info('INFO: Testing')
     results_all = []
     model_pos.eval()            
+    
+    # Register layer-wise hooks if provided
+    layer_outputs = {}
+    last_batch_gt = None
+    hook_handles = []
+    if layer_hooks is not None:
+        def make_layer_hook(name):
+            def hook(module, input, output):
+                layer_outputs[name] = output[0].detach() if isinstance(output, tuple) else output.detach()
+            return hook
+        model_pos_unwrapped = model_pos.module if hasattr(model_pos, 'module') else model_pos
+        for i, blk in enumerate(getattr(model_pos_unwrapped, 'STEblocks', [])):
+            hook_handles.append(blk.register_forward_hook(make_layer_hook(f'ste_{i}')))
+        for i, blk in enumerate(getattr(model_pos_unwrapped, 'TTEblocks', [])):
+            hook_handles.append(blk.register_forward_hook(make_layer_hook(f'tte_{i}')))
+    
     with torch.no_grad():
         for batch_input, batch_gt in tqdm(test_loader):
+            last_batch_gt = batch_gt
             N, T = batch_gt.shape[:2]
             if torch.cuda.is_available():
                 batch_input = batch_input.cuda()
+                batch_gt = batch_gt.cuda()
             if args.no_conf:
                 batch_input = batch_input[:, :, :, :2]
             if args.flip:    
@@ -170,7 +188,28 @@ def evaluate(args, model_pos, test_loader, datareader):
     log.info(f'Protocol #1 Error (MPJPE):{e1}mm')
     log.info(f'Protocol #2 Error (P-MPJPE):{e2}mm')
     log.info('----------')
-    return e1, e2, results_all
+    
+    # Compute layer-wise MPJPE from hooks (on last batch in normalized space)
+    layer_metrics = {}
+    if layer_hooks is not None and layer_outputs and last_batch_gt is not None:
+        model_pos_unwrapped = model_pos.module if hasattr(model_pos, 'module') else model_pos
+        head = getattr(model_pos_unwrapped, 'head', None)
+        if head is not None:
+            last_batch_gt = last_batch_gt.cpu()
+            if args.rootrel:
+                last_batch_gt = last_batch_gt - last_batch_gt[:,:,0:1,:]
+            for name, feat in layer_outputs.items():
+                feat = feat.cpu()
+                pred = head(feat)
+                err = torch.mean(torch.norm(pred - last_batch_gt, dim=-1)).item()
+                layer_metrics[f'layer_mpjpe/{name}'] = err
+                log.info(f'Layer {name} norm-space error: {err:.4f}')
+    
+    # Clean up hooks
+    for h in hook_handles:
+        h.remove()
+    
+    return e1, e2, results_all, layer_metrics
         
 def train_epoch(args, model_pos, train_loader, losses, optimizer, has_3d, has_gt, accum_steps=1, epoch=0):
     model_pos.train()
@@ -270,8 +309,6 @@ def train_with_config(args, opts):
     except OSError as e:
         if e.errno != errno.EEXIST:
             raise RuntimeError('Unable to create checkpoint directory:', opts.checkpoint)
-    train_writer = tensorboardX.SummaryWriter(os.path.join(opts.checkpoint, "logs"))
-
     if opts.wandb:
         run_name = os.path.basename(opts.checkpoint)
         wandb.init(
@@ -325,6 +362,8 @@ def train_with_config(args, opts):
     for parameter in model_backbone.parameters():
         model_params = model_params + parameter.numel()
     log.info(f'INFO: Trainable parameter count:{model_params}')
+    if opts.wandb and wandb.run is not None:
+        wandb.config.update({'model_params': model_params}, allow_val_change=True)
 
     if torch.cuda.is_available():
         # torch.distributed.init_process_group('nccl', init_method='tcp://localhost:23456', world_size=2, rank=0)
@@ -392,6 +431,9 @@ def train_with_config(args, opts):
         if args.mask or args.noise:
             args.aug = Augmenter2D(args)
         
+        # Layer-wise diagnostics: set to True to log per-block MPJPE during eval
+        layer_hooks = True
+        
         # Training
         for epoch in range(st, args.epochs):
             log.info(f'Training epoch {epoch}.')
@@ -442,7 +484,7 @@ def train_with_config(args, opts):
                     lr,
                    losses['3d_pos'].avg))
             else:
-                e1, e2, results_all = evaluate(args, model_pos, test_loader, datareader)
+                e1, e2, results_all, layer_metrics = evaluate(args, model_pos, test_loader, datareader, layer_hooks)
                 log.info('[%d] time %.2f lr %f 3d_train %f e1 %f e2 %f' % (
                     epoch + 1,
                     elapsed,
@@ -450,20 +492,9 @@ def train_with_config(args, opts):
                     losses['3d_pos'].avg,
                     e1, e2))
                 log.info(f'Remaining training time: {datetime.timedelta(seconds=time.time() - start_time) * (args.epochs - epoch)}')
-                train_writer.add_scalar('Error P1', e1, epoch + 1)
-                train_writer.add_scalar('Error P2', e2, epoch + 1)
-                train_writer.add_scalar('loss_3d_pos', losses['3d_pos'].avg, epoch + 1)
-                train_writer.add_scalar('loss_2d_proj', losses['2d_proj'].avg, epoch + 1)
-                train_writer.add_scalar('loss_3d_scale', losses['3d_scale'].avg, epoch + 1)
-                train_writer.add_scalar('loss_3d_velocity', losses['3d_velocity'].avg, epoch + 1)
-                train_writer.add_scalar('loss_lv', losses['lv'].avg, epoch + 1)
-                train_writer.add_scalar('loss_lg', losses['lg'].avg, epoch + 1)
-                train_writer.add_scalar('loss_a', losses['angle'].avg, epoch + 1)
-                train_writer.add_scalar('loss_av', losses['angle_velocity'].avg, epoch + 1)
-                train_writer.add_scalar('loss_total', losses['total'].avg, epoch + 1)
 
                 if opts.wandb:
-                    wandb.log({
+                    wandb_log = {
                         'epoch': epoch + 1,
                         'Error P1 (MPJPE)': e1,
                         'Error P2 (P-MPJPE)': e2,
@@ -476,7 +507,10 @@ def train_with_config(args, opts):
                         'loss_av': losses['angle_velocity'].avg,
                         'loss_total': losses['total'].avg,
                         'lr': lr,
-                    }, step=epoch + 1)
+                    }
+                    if layer_metrics:
+                        wandb_log.update(layer_metrics)
+                    wandb.log(wandb_log, step=epoch + 1)
 
             # Save checkpoints
             chk_path = os.path.join(opts.checkpoint, 'epoch_{}.bin'.format(epoch))
@@ -493,7 +527,7 @@ def train_with_config(args, opts):
                 save_checkpoint(chk_path_best, epoch, lr, optimizer, model_pos, min_loss, is_best=True)
                 
     if opts.evaluate:
-        e1, e2, results_all = evaluate(args, model_pos, test_loader, datareader)
+        e1, e2, results_all, _ = evaluate(args, model_pos, test_loader, datareader, layer_hooks=True)
 
     if opts.wandb:
         wandb.finish()

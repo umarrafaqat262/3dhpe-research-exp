@@ -1,73 +1,52 @@
-# Weakness Analysis: PoseMamba and Broader Literature
+# Weakness Analysis: PoseMamba
 
-## 1.1 From PoseMamba Paper Analysis
+## 1.1 Architectural Weaknesses (Code-Level Analysis)
 
-The following weaknesses were identified by systematically analyzing the PoseMamba paper
-(Huang et al., AAAI 2025), its supplementary material, codebase, and comparison with
-subsequent SSM literature.
+| # | Weakness | Location | Severity | Description |
+|---|----------|----------|----------|-------------|
+| W1 | **No true spatio-temporal separation** — STE and TTE blocks use identical `BiSTSSMBlock` with same `forward_type='v2_plus_poselimbs'`. Both process `(B, T, J, D)` identically. The "spatial" vs "temporal" naming is cosmetic — only `blocks[0]` of each type receives positional encoding. | `PoseMamba.py` lines 95-131, `mambablocks.py` | **Critical** | After block 0, every block does the same 2D scan over the full T×J grid. No dedicated spatial-only or temporal-only pathway exists. This wastes parameters: 20 identical blocks instead of specialized spatio-temporal processing. |
+| W2 | **plus_poselimbs has no gradient flow** — `CrossScan_plus_poselimbs.backward()` is identical to standard `CrossScan.backward()`. The skeleton blending `x + x[..., indices]` on path 0 is injected forward but gradient bypasses it via straight-through estimator. The skeleton prior is non-learnable. | `csms6s.py` lines 149-192 | **Critical** | The main spatial inductive bias (joint adjacency) cannot be refined through training. The backward treats path 0 as identity, missing the `scatter_add` gradient from the indices operation. |
+| W3 | **Asymmetric skeleton prior** — The `indices` array heavily blends left-side joints (1-6, 11-13) while leaving right-side joints (14-16) mostly untouched. Some connections are bizarre (R Ankle→L Hip, L Wrist→R Shoulder). | `csms6s.py` line 156 | **High** | Creates unintended left-right processing asymmetry. Right arm/shoulder joints (14-16) map to themselves — no topology mixing at all. |
+| W4 | **Very shallow head** — Single `LayerNorm + Linear(D, 3)` maps backbone features to 3D coordinates. No refinement, no residual, no multi-scale aggregation. All heavy lifting is on the backbone. | `PoseMamba.py` lines 89-92 | **High** | A linear projection from 64-dim features to 3D coordinates is extremely limited. Minor feature noise directly corrupts output. |
+| W5 | **No position encoding in blocks after block 0** — Positional encoding (spatial and temporal) is added once before the first block of each stack. Blocks 1..N-1 receive no positional signal. | `PoseMamba.py` lines 95-131 | **Moderate** | Deeper blocks operate on position-agnostic representations. For T=243, positional information may be lost by block 5-6. |
+| W6 | **Small state dimension (N=16)** — Each SSM channel has only 16 hidden states. Mamba-2 uses N=64-256. With K=4 scan groups, total effective state = 128×16=2048 for S variant. | `mambablocks.py` line 247 | **Moderate** | Limited state may bottleneck long-range temporal modeling for T=243 sequences. |
+| W7 | **Memory blowup from 4× CrossScan** — Creates 4 copies of `(B, D', H, W)` tensor. For B variant with batch=4: ~64MB per SSM layer. 40 layers → ~2.5GB for scan buffers alone. | `csms6s.py` lines 4-75 | **Moderate** | GPU memory pressure limits batch size and model scale. |
 
-| # | Weakness | Type | Severity | Evidence | Impact on Claims |
-|---|----------|------|----------|----------|------------------|
-| W1 | **Pure SSM ignores skeletal topology** — 1D scan treats joints as flat sequence, destroying graph structure | Architectural | **Critical** | SasMamba (WACV 2026), MambaTopFusion (2026), Spatial-Mamba (ICLR 2025) all identify this as the fundamental SSM limitation for pose | SSM's linear scan cannot model joint adjacency; limbs predicted independently |
-| W2 | **Weak local joint dependency** — SSM's selective state prioritizes long-range over local interactions | Architectural | **Critical** | PoseMagic (AAAI 2025), HGMamba, GEM — all propose GCN/Mamba hybrid to fix | Local limb geometry is poorly captured, causing higher per-joint error on extremities |
-| W3 | **Only indoor benchmark (H36M)** — no wild video evaluation | Scope | **High** | Claude analysis; no 3DPW, EMDB, or Fit3D anywhere | Generalization to real-world deployment untested |
-| W4 | **No cross-dataset evaluation** — train on H36M, test only on H36M | Scope | **High** | Claude analysis; no train-on-A, test-on-B protocol | Overfitting to dataset-specific biases undiscovered |
-| W5 | **Single-run results, no variance** — tables report single MPJPE numbers | Statistical | **High** | Claude analysis; no mean ± std, no confidence intervals | SOTA margins often sub-1 mm — significance unconfirmable |
-| W6 | **No statistical significance testing** — improvements asserted without tests | Statistical | **High** | Claude analysis; no t-tests, bootstrap, or Wilcoxon | Claims of "state-of-the-art" rest on single-point estimates |
-| W7 | **Known per-joint failure: head/neck** — underperforms on head and neck | Design | **High** | Supplementary material, Claude analysis | Practical applications (face/gaze tracking) unaddressed |
-| W8 | **2D detector not ablated** — only Stacked Hourglass used | Fairness | **Moderate** | Claude analysis; HRNet used by some baselines (asterisked) | Inconsistent comparison conditions |
-| W9 | **No ablation of local scan order** — geometric reordering not varied | Design | **Moderate** | Claude analysis; only "with vs. without" tested, not which ordering | Optimal scan topology undetermined |
-| W10 | **No bone-length constraint or temporal smoothness analysis** — MPJVE only | Scope | **Moderate** | Claude analysis; BLCE not measured | Temporal coherence beyond aggregate error unchecked |
-| W11 | **Small state dimension (N=16)** — Mamba-2 uses N=64-256 | Capacity | **Low** | Mamba-2 SSD paper (Dao & Gu, ICML 2024) | SSM state may be bottleneck for complex pose dynamics |
+## 1.2 Literature-Backed Weaknesses
 
-## 1.2 From Broader Literature
-
-| Domain | Finding | Source | Transferable To | Evidence Level |
-|--------|---------|--------|-----------------|----------------|
-| **NLP SSMs** | **Mamba-2 SSD**: larger state (N=64+), scalar A param, chunked training 2-8x faster | Dao & Gu, ICML 2024 | Replace selective_scan kernel; increase state dim | 4 (ICML) |
-| **NLP SSMs** | **Hybrid SSM-Attention**: 7% attention + 93% SSM beats pure SSM | Jamba (AI21, 2024), TransMamba, Nemotron | Add sparse attention layers to PoseMamba | 4 (AI21 production) |
-| **NLP SSMs** | **Mamba-3**: complex-valued states, MIMO SSM, RoPE, QKNorm | Lahoti et al., 2026 | RoPE for SSM ordering; QKNorm for stability | 3 (arXiv 2026) |
-| **NLP SSMs** | **Gated DeltaNet**: replacement for selective scan with gating | Yang et al., 2024 | Alternative to Mamba block; simpler training | 2 (ICLR 2025 under review) |
-| **Vision SSMs** | **Spatial-Mamba**: 3x3 depthwise conv replaces 1D causal conv for spatial locality | ICLR 2025 | Better local spatial modeling in SSM | 4 (ICLR) |
-| **Vision SSMs** | **ASGMamba**: frequency-selective gating via patch-level FFT | arXiv 2026 | Noise filtering for pose dynamics | 2 (arXiv 2026) |
-| **Vision SSMs** | **LocalViM**: local vision Mamba with windowed scanning | Huang et al., 2025 | Windowed scan for local joint groups | 3 (arXiv 2025) |
-| **3D HPE** | **Dual-stream Mamba+GCN** with adaptive fusion beats PoseMamba by -0.9mm | PoseMagic (AAAI 2025) | **P0** — simplest highest-impact intervention | **5** (AAAI, same benchmark) |
-| **3D HPE** | **Structure-aware stride scan** preserves skeleton topology | SasMamba (WACV 2026) | **P1** — topological fix for SSM scan | **3** (WACV) |
-| **3D HPE** | **Bone-aware module** with direction/length vectors as topological prior | MambaTopFusion (arXiv 2026) | **P2** — strong inductive bias for skeleton | **3** (arXiv 2026) |
-| **3D HPE** | **Decoupled S-T bidirectional scans** — separate SSM passes for space and time | DBMambaPose (arXiv 2025) | **P3** — cleaner dimension separation | **3** (arXiv 2025) |
-| **3D HPE** | **Hierarchical GCN+Mamba** with multi-scale fusion | HGMamba (arXiv 2025) | Multi-scale approach for compound | **3** (arXiv 2025) |
-| **Training** | **Cosine annealing + linear warmup** improves convergence over exponential decay | Loshchilov & Hutter, Sapiens (CVPR 2024) | Free lunch: config change only | **5** (standard practice) |
-| **Training** | **Gradient accumulation** enables large effective batch on small GPU | Standard practice | Match paper batch=32 with L4 | **5** (engineering standard) |
-| **Training** | **Gradient clipping (max_norm=1.0)** prevents gradient explosion | Sapiens, standard practice | Training stability | **4** (standard) |
+| # | Weakness | Evidence | Δ Reported | Source |
+|---|----------|----------|-----------|--------|
+| W8 | **Pure SSM ignores skeletal topology** — 1D/2D scan treats joints as flat sequence, destroying graph structure | PoseMagic: Δ=-0.9mm, SasMamba: Δ=-1.6mm, MambaTopFusion: Δ=-2.0mm | -0.9 to -2.0mm | PoseMagic (AAAI 2025), SasMamba (WACV 2026), MambaTopFusion (CVIU 2026) |
+| W9 | **Weak local joint dependency** — SSM selective state prioritizes long-range over local interactions | PoseMagic, HGMamba, GEM all propose GCN/Mamba hybrid | -0.9mm | PoseMagic (AAAI 2025), HGMamba (arXiv 2025), GEM (2026) |
+| W10 | **Scan order is not skeleton-aware** — Flat row-major + column-major is optimal for images, not skeletons | SasMamba shows stride scan over body parts improves results | -0.5mm | SasMamba (WACV 2026) |
+| W11 | **No explicit bone/length modeling** — Joint coordinates alone lack bone direction and length information | MambaTopFusion bone module gives additional gain | -0.4mm | MambaTopFusion (CVIU 2026) |
 
 ## 1.3 Weakness-to-Fix Mapping
 
-| Weakness | Fix | Experiment | Priority |
-|----------|-----|------------|----------|
-| W1 (topology ignored) | GCN-Mamba dual-stream (P0) | Exp 02 | P0 |
-| W2 (local dependency) | Structure-aware stride scan (P1) | Exp 03 | P1 |
-| W3 (only indoor) | Add 3DPW, EMDB zero-shot eval | Cross-cutting | High |
-| W4 (no cross-dataset) | Train H36M → test MPI-INF-3DHP | Cross-cutting | High |
-| W5 (single-run) | 5-seed protocol, report mean±std, 95% CI | Cross-cutting | High |
-| W6 (no significance) | Wilcoxon signed-rank, Holm-Bonferroni | Cross-cutting | High |
-| W7 (head/neck failure) | Head-Aware Branch (P6) + GCN-Mamba | Exp 02 + P6 | P2 |
-| W8 (detector not ablated) | Add HRNet comparison | Cross-cutting | Medium |
-| W9 (scan order) | Implicitly fixed by GCN-Mamba | Exp 02 | P0 |
-| W10 (no BLCE) | Add BLCE metric | Cross-cutting | Medium |
-| W11 (small state) | Increase d_state from 16 to 64 (P8) | Exp 08 | P2 |
+| Weakness | Fix | Experiment | Est. Δ | Priority |
+|----------|-----|------------|--------|----------|
+| W2+W3 (no gradient flow, asymmetric prior) | Learnable skeleton adjacency (H12) | Exp 01 | -0.4mm | **P0** |
+| W8+W9 (no spatial topology) | GCN-Mamba dual-stream (H1) | Exp 02 | -0.9mm | **P0** |
+| W1 (no spatio-temporal separation) | SAMA-style state-level fusion inside dual-stream (H11) | Exp 03 | -0.6mm additive | P1 |
+| W4 (shallow head) | Deeper head with residual refinement | Compound | -0.1mm | P1 |
+| W10 (scan order) | Structure-aware stride scan (H2) | Deferred | -0.5mm | P2 |
+| W11 (no bone modeling) | Bone-aware module (H6) | Deferred | -0.4mm | P2 |
+| W5 (position encoding decay) | Add positional encoding to deeper blocks | Deferred | -0.1mm | P2 |
+| W6 (small state) | Mamba-2 SSD with N=64 (H9) | Deferred | -0.2mm | P3 |
+| W7 (memory) | Fused kernel or cascade2d variant | Deferred | N/A | P3 |
 
 ## 1.4 Criticality Assessment
 
-**Critical weaknesses** (must fix for publication):
-- W1, W2: These are architectural — they limit the model's ceiling regardless of training improvements
-- W3, W4: Without cross-dataset eval, reviewers will question generalization
+**Critical weaknesses** (block publication without address):
+- W2+W3: The main spatial inductive bias is broken (no gradient flow) and asymmetric
+- W8: Pure SSM without topology modeling is the fundamental limitation proven by 3+ papers
 
-**High-severity weaknesses** (strongly recommended):
-- W5, W6: Without statistics, comparisons lack credibility
-- W7: Head/neck errors are visually obvious in qualitative results
+**High-severity** (significant impact on results):
+- W1: Wasted parameters on identical blocks
+- W4: Shallow head loses precision
 
-**Moderate weaknesses** (should address):
-- W8, W9, W10: Important for thoroughness but not blocking
+**Moderate** (should address in compound):
+- W5, W6, W10, W11
 
-**Low-severity weaknesses** (nice-to-have):
-- W11: Can be bundled with compound experiments
+**Deferred** (engineering optimizations):
+- W7, W9 (resolved by H1)
