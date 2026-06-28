@@ -82,7 +82,8 @@ def load_backbone(args):
         args.backbone = 'DSTformer' # Default
     if args.backbone=='PoseMamba':
         in_chans = getattr(args, 'input_channels', 2)
-        model_backbone = PoseMamba(num_frame=args.maxlen, embed_dim_ratio=args.dim_feat, mlp_ratio = args.mlp_ratio, depth = args.depth, in_chans=in_chans)
+        use_hypergcn = getattr(args, 'use_hypergcn', False)
+        model_backbone = PoseMamba(num_frame=args.maxlen, embed_dim_ratio=args.dim_feat, mlp_ratio = args.mlp_ratio, depth = args.depth, in_chans=in_chans, use_hypergcn=use_hypergcn)
     elif args.backbone=='DSTformer':
         model_backbone = DSTformer(dim_in=3, dim_out=3, dim_feat=args.dim_feat, dim_rep=args.dim_rep, 
                                    depth=args.depth, num_heads=args.num_heads, mlp_ratio=args.mlp_ratio, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
