@@ -2,13 +2,24 @@
 
 **Goal:** Beat PoseMamba (38.1mm P1 on H36M) with literature-backed architectural changes, targeting CVPR-level publication.
 
-**Methodology:** One hypothesis per experiment, staged validation (correctness → overfit → short val → full val), full hypothesis bank in `RESEARCH_PLAN.md`.
+**Methodology:** One hypothesis per experiment, staged validation (S1 correctness → S2 overfit → S3 short val → S4 full ×3 seeds), full hypothesis bank in `docs/03_hypotheses.md`.
 
-**Train config:** batch_size=4, accum_steps=8 → effective batch=32 (matches paper), gradient clipping max_norm=1.0.
+**Train config:** batch_size=4, accum_steps=8 → effective batch=32, cosine annealing (warmup=5), gradient clipping max_norm=1.0.
+
+**Comprehensive docs:**
+- [`docs/01_weakness_analysis.md`](docs/01_weakness_analysis.md) — Weakness-to-fix mapping
+- [`docs/02_literature_review.md`](docs/02_literature_review.md) — Full literature sweep with hybrid taxonomy
+- [`docs/03_hypotheses.md`](docs/03_hypotheses.md) — 11 hypotheses (H1–H11) with falsification
+- [`docs/04_experimental_design.md`](docs/04_experimental_design.md) — Protocol, power analysis, statistics
+- [`docs/05_implementation.md`](docs/05_implementation.md) — Code structure map, LOC estimates
+- [`docs/06_references.md`](docs/06_references.md) — Full bibliography (38 references)
 
 ---
 
 ## Exp 00: Baseline Reproduction
+
+> **NOTE:** The `nohup` session issue caused 3 silent background failures — foreground training verified OK.
+> Use `setsid` for background runs (see below).
 
 | Field | Value |
 |-------|-------|
@@ -86,11 +97,31 @@
 
 ---
 
-## Exp 06: Hybrid SSM-Attention (P7)
+## Exp 06: Hybrid SSM-Attention (H8)
 
-**Hypothesis:** Adding 2 sparse attention layers to SSM pipeline improves long-range modeling.
+**Hypothesis:** Adding 2 sparse attention layers to SSM pipeline improves long-range modeling (inspired by VIMCAN CVPR 2026, Jamba-1.5, Nemotron-H).
 
 **Est. Δ:** -0.3mm P1 MPJPE
+
+---
+
+## Exp 07: SAMA-Style State-Level Fusion (H11)
+
+**Hypothesis:** Feature-level dual-stream fusion (H1) is post-hoc. State-level fusion — modifying the SSM state transition to incorporate joint topology — yields additional improvement beyond feature-level fusion alone.
+
+**Mechanism:** SAMA-style Structure-aware State Integrator: before state update, aggregate neighboring joint states via learned adjacency weights.
+
+**Est. Δ:** -0.6mm P1 MPJPE (combined with H1: up to -1.5mm)
+
+**Novelty:** No paper combines state-level (SAMA) + feature-level (PoseMagic) fusion. Novel architecture if both H1 and H11 confirm.
+
+---
+
+## Exp 08: RoPE + QKNorm (H10)
+
+**Hypothesis:** SSM lacks explicit position encoding. RoPE + QKNorm (Mamba-3 style) improves order awareness.
+
+**Est. Δ:** -0.2mm P1 MPJPE
 
 ---
 
@@ -104,13 +135,21 @@
 | — | PoseMagic (Mamba+GCN) | 40.9 | — | ~1.2M | -0.9 | AAAI 2025 |
 | — | DBMambaPose | 40.5 | — | ~2.0M | -1.3 | arXiv 2025 |
 | — | SasMamba | 40.2 | — | ~1.5M | -1.6 | WACV 2026 |
-| 00 | PoseMamba-S (ours) | — | — | — | — | ⏳ Planned |
+| — | HGMamba (HyperGCN+Mamba) | 38.65 | — | — | — | arXiv 2025 |
+| — | VIMCAN (Mamba+CrossAttn+IMU) | 45.3* | — | — | — | CVPR 2026 |
+| — | PoseMamba-L (paper) | 38.1 | — | 6.7M | — | Published |
+| — | AGMamba (Attention-GCN+Mamba) | **SOTA** | — | — | — | SIVP 2026 |
+| 00 | PoseMamba-S (ours) | — | — | 1.47M | — | ⏳ Training |
 | 01 | + Training Opt | — | — | — | — | ⏳ Planned |
-| 02 | + GCN-Mamba | — | — | — | — | ⏳ Planned |
-| 03 | + Stride Scan | — | — | — | — | ⏳ Planned |
-| 04 | + Bone Module | — | — | — | — | ⏳ Planned |
-| 05 | + Compound | — | — | — | — | ⏳ Planned |
-| 06 | + Hybrid Attention | — | — | — | — | ⏳ Planned |
+| 02 | + GCN-Mamba (H1) | — | — | — | — | ⏳ Planned |
+| 03 | + Stride Scan (H2) | — | — | — | — | ⏳ Planned |
+| 04 | + Bone Module (H6) | — | — | — | — | ⏳ Planned |
+| 05 | + Compound (H1+H2+H6) | — | — | — | — | ⏳ Planned |
+| 06 | + Hybrid Attention (H8) | — | — | — | — | ⏳ Planned |
+| 07 | + SAMA Fusion (H11) | — | — | — | — | ⏳ Planned |
+| 08 | + RoPE+QKNorm (H10) | — | — | — | — | ⏳ Planned |
+
+*VIMCAN uses IMU data — not directly comparable
 
 ---
 
@@ -138,9 +177,10 @@ python -u kinecmamba/train.py \
   --checkpoint experiments/exp01_train_opt/PoseMamba_S \
   --seed 0 --wandb true
 
-# Background (nohup) — always use full conda python path
+# Background (setsid) — always use full conda python path
+# NOTE: nohup doesn't fully detach from session — use setsid instead
 mkdir -p experiments/exp00_baseline && \
-nohup env PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+setsid env PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
   /home/ubuntu/miniforge3/envs/posemamba/bin/python -u kinecmamba/train.py \
   --config kinecmamba/configs/pose3d/PoseMamba_train_h36m_S.yaml \
   --checkpoint experiments/exp00_baseline/PoseMamba_S \

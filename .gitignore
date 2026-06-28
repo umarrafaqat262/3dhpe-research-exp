@@ -3,7 +3,7 @@ wandb/
 __pycache__/
 *.pyc
 *.so
-experiments/*/
+experiments/exp*/
 kinecmamba/data/
 kinecmamba/kernels/build/
 kinecmamba/kernels/selective_scan/build/
@@ -22,3 +22,16 @@ kinecmamba/configs/pose3d/MB_train_h36m.yaml
 kinecmamba/configs/pose3d/PoseMamba_train_h36m_B.yaml
 kinecmamba/configs/pose3d/PoseMamba_train_h36m_L.yaml
 kinecmamba/convert_img2video.py
+kinecmamba/demo.sh
+kinecmamba/eval.sh
+kinecmamba/train.sh
+kinecmamba/infer_wild.py
+kinecmamba/vis.py
+kinecmamba/requirements.txt
+kinecmamba/sample_video.gif
+kinecmamba/docs/
+kinecmamba/hf-space/
+kinecmamba/notebooks/
+kinecmamba/pose3d/
+kinecmamba/scripts/
+kinecmamba/tools/
