@@ -34,8 +34,9 @@ import math
 import numpy as np
 
 from lib.model.mambablocks import BiSTSSMBlock
+from lib.model.modules.msm import PerJointDelta
 class  PoseMamba(nn.Module):
-    def __init__(self, num_frame=9, num_joints=17, in_chans=2, embed_dim_ratio=256, depth=6, mlp_ratio=2., drop_rate=0., drop_path_rate=0.2,  norm_layer=None):
+    def __init__(self, num_frame=9, num_joints=17, in_chans=2, embed_dim_ratio=256, depth=6, mlp_ratio=2., drop_rate=0., drop_path_rate=0.2,  norm_layer=None, use_msm=False):
         """    ##########hybrid_backbone=None, representation_size=None,
         Args:
             num_frame (int, tuple): input frame number
@@ -85,6 +86,13 @@ class  PoseMamba(nn.Module):
 
         self.Spatial_norm = norm_layer(embed_dim_ratio)
         self.Temporal_norm = norm_layer(embed_dim)
+
+        self.use_msm = use_msm
+        if use_msm:
+            d_inner = int(2 * embed_dim_ratio)
+            self.msm = PerJointDelta(num_joints, d_inner)
+            for blk in self.STEblocks:
+                blk.op.msm = self.msm
 
         self.head = nn.Sequential(
             nn.LayerNorm(embed_dim),
