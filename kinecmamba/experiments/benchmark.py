@@ -223,20 +223,19 @@ def run_experiment(name, config_file):
     with open(train_out, 'w') as f:
         f.write(combined)
 
+    # Always try to parse MPJPE (printed before eval layer_hooks crash)
+    p1, p2, loss = extract_mpjpe(combined)
+    results['mpjpe_p1'] = p1
+    results['p_mpjpe'] = p2
+    results['loss_3d'] = loss
+
     if rc != 0:
-        print('  ERROR in training: %s' % stderr[:500])
-        print('  (stdout last 20 lines in %s)' % train_out)
-        results['train_error'] = stderr[:500]
-        return results
-    else:
-        p1, p2, loss = extract_mpjpe(combined)
-        results['mpjpe_p1'] = p1
-        results['p_mpjpe'] = p2
-        results['loss_3d'] = loss
-        print('  Time: %.1fs' % results['train_time'])
-        print('  MPJPE (P1): %s' % ('%.2f' % p1 if p1 else 'N/A'))
-        print('  P-MPJPE (P2): %s' % ('%.2f' % p2 if p2 else 'N/A'))
-        print('  3D loss: %s' % ('%.4f' % loss if loss else 'N/A'))
+        print('  ERROR (non-zero rc=%d): %s' % (rc, stderr[:200]))
+        results['train_error'] = stderr[:200]
+    print('  Time: %.1fs' % results['train_time'])
+    print('  MPJPE (P1): %s' % ('%.2f' % p1 if p1 else 'N/A'))
+    print('  P-MPJPE (P2): %s' % ('%.2f' % p2 if p2 else 'N/A'))
+    print('  3D loss: %s' % ('%.4f' % loss if loss else 'N/A'))
 
     return results
 

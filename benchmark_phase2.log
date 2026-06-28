@@ -1,0 +1,34 @@
+
+============================================================
+  BENCHMARK: A1_baseline
+  Config: exp_A1_baseline.yaml
+  Output: /home/ubuntu/experiments/kinecmamba/experiments/results/A1_baseline
+============================================================
+
+[TIER 1] Zero-shot diagnostics...
+  Params: 1,470,211
+  grad_avg: 0.172220
+  grad_max: 3.101579
+  Gradient flow: OK
+
+[TIER 2] Training (1 epoch)...
+  ERROR in training: /home/ubuntu/miniforge3/envs/posemamba/lib/python3.10/site-packages/timm/models/helpers.py:7: FutureWarning: Importing from timm.models.helpers is deprecated, please import via timm.models
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", FutureWarning)
+/home/ubuntu/miniforge3/envs/posemamba/lib/python3.10/site-packages/timm/models/layers/__init__.py:49: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnin
+  (stdout last 20 lines in /home/ubuntu/experiments/kinecmamba/experiments/results/A1_baseline/train_log.txt)
+  [saved] /home/ubuntu/experiments/kinecmamba/experiments/results/benchmark_results.csv
+
+============================================================
+  BENCHMARK: A2_confidence
+  Config: exp_A2_confidence.yaml
+  Output: /home/ubuntu/experiments/kinecmamba/experiments/results/A2_confidence
+============================================================
+
+[TIER 1] Zero-shot diagnostics...
+  Params: 1,470,275
+  grad_avg: 0.192627
+  grad_max: 2.891658
+  Gradient flow: OK
+
+[TIER 2] Training (1 epoch)...

@@ -199,9 +199,9 @@ def evaluate(args, model_pos, test_loader, datareader, layer_hooks=None):
             if args.rootrel:
                 last_batch_gt = last_batch_gt - last_batch_gt[:,:,0:1,:]
             for name, feat in layer_outputs.items():
-                feat = feat.cpu()
                 pred = head(feat)
-                err = torch.mean(torch.norm(pred - last_batch_gt, dim=-1)).item()
+                ref = last_batch_gt.to(pred.device)
+                err = torch.mean(torch.norm(pred - ref, dim=-1)).item()
                 layer_metrics[f'layer_mpjpe/{name}'] = err
                 log.info(f'Layer {name} norm-space error: {err:.4f}')
     
