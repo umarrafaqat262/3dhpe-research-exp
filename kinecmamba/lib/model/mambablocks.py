@@ -523,6 +523,8 @@ class BiSTSSM_v2:
 
             xs = xs.view(B, -1, L)
             dts = dts.contiguous().view(B, -1, L)
+            if hasattr(self, 'msm') and self.msm is not None:
+                dts = self.msm(dts, B, K, D, H, W)
             As = -torch.exp(A_logs.to(torch.float)) # (k * c, d_state)
             Bs = Bs.contiguous().view(B, K, N, L)
             Cs = Cs.contiguous().view(B, K, N, L)
