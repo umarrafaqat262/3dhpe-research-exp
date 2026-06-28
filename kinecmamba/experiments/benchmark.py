@@ -43,8 +43,12 @@ EXPERIMENTS = [
 
 RESULTS_FILE = os.path.join(RESULTS_DIR, 'benchmark_results.csv')
 
-def run_capture(cmd, timeout=1800):
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+def run_capture(cmd, timeout=1800, env=None):
+    full_env = os.environ.copy()
+    full_env['PYTHONWARNINGS'] = 'ignore'
+    if env:
+        full_env.update(env)
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=full_env)
     return result.stdout, result.stderr, result.returncode
 
 CSV_FIELDS = ['experiment', 'timestamp', 'config', 'params', 'grad_flow',

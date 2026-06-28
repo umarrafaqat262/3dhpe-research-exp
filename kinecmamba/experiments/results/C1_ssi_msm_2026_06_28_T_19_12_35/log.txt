@@ -1,0 +1,46 @@
+[92m06-28 11:12:35[0m {'accum_steps': 8, 'att_fuse': True, 'backbone': 'PoseMamba', 'batch_size': 4, 'checkpoint_frequency': 30, 'clip_len': 243, 'data_root': 'data/motion3d/MB3D_f243s81/', 'data_stride': 81, 'depth': 10, 'dim_feat': 64, 'dropout': 0.0, 'dt_file': 'h36m_sh_conf_cam_source_final.pkl', 'epochs': 1, 'finetune': False, 'flip': True, 'grad_clip_norm': 1.0, 'gt_2d': False, 'input_channels': 2, 'lambda_3d': 1.0, 'lambda_3d_velocity': 20.0, 'lambda_3dw': 0.0, 'lambda_a': 0.0, 'lambda_av': 0.0, 'lambda_diff': 0.5, 'lambda_lg': 0.0, 'lambda_lv': 0.0, 'lambda_scale': 0.5, 'learning_rate': 0.0002, 'lr_decay': 0.99, 'lr_scheduler': 'cosine', 'mask_T_ratio': 0.0, 'mask_ratio': 0.0, 'maxlen': 243, 'mlp_ratio': 2, 'no_conf': True, 'no_eval': False, 'noise': False, 'num_joints': 17, 'partial_train': None, 'rootrel': True, 'sample_stride': 1, 'subset_list': ['H36M-SH'], 'synthetic': False, 'train_2d': False, 'use_msm': True, 'use_ssi': True, 'warmup_epochs': 5, 'weight_decay': 0.01, 'name': '_benchmark_config'}
+[92m06-28 11:12:35[0m Number of GPUs found:1
+[92m06-28 11:12:35[0m Loading dataset...
+[92m06-28 11:12:35[0m INFO: Trainable parameter count:1483300
+[92m06-28 11:12:36[0m INFO: Training on 3518(3D) batches
+[92m06-28 11:12:36[0m Gradient accumulation steps: 8, effective batch size: 32
+[92m06-28 11:12:36[0m LR scheduler: cosine, warmup epochs: 5
+[92m06-28 11:12:36[0m Training epoch 0.
+[92m06-28 11:31:39[0m INFO: Testing
+[92m06-28 11:33:21[0m 557
+[92m06-28 11:33:22[0m (2228, 243, 17, 3)
+[92m06-28 11:33:22[0m num_test_frames:566920
+[92m06-28 11:33:22[0m 2228
+[92m06-28 11:33:26[0m +-----------+--------------------+--------------------+-------------------+--------------------+--------------------+--------------------+--------------------+-------------------+--------------------+--------------------+--------------------+--------------------+--------------------+--------------------+--------------------+
+| test_name |     Direction      |      Discuss       |       Eating      |       Greet        |       Phone        |       Photo        |        Pose        |      Purchase     |      Sitting       |    SittingDown     |       Smoke        |        Wait        |        Walk        |      WalkDog       |      WalkTwo       |
++-----------+--------------------+--------------------+-------------------+--------------------+--------------------+--------------------+--------------------+-------------------+--------------------+--------------------+--------------------+--------------------+--------------------+--------------------+--------------------+
+|     P1    | 138.34593533586573 | 173.81278737011723 | 209.4723564555301 | 160.29156140339228 | 190.30474534696557 | 217.60004739296008 | 134.71355431400735 | 230.3543872800203 |  252.691937039343  | 288.69197835400416 | 184.8137945955093  | 159.14102651119296 | 129.6197760384059  | 218.47432401575998 | 144.07929889506272 |
+|     P2    | 113.34385483340962 | 124.95385686035736 | 133.9407861749243 | 118.80357989901869 | 126.94803323670804 | 143.31964757637303 | 103.07583974182124 | 131.5546895164108 | 150.11438976934693 | 191.25621187387125 | 122.61490906288327 | 110.96314133183661 | 109.52462020430545 |  140.198824493828  | 120.49702817563657 |
++-----------+--------------------+--------------------+-------------------+--------------------+--------------------+--------------------+--------------------+-------------------+--------------------+--------------------+--------------------+--------------------+--------------------+--------------------+--------------------+
+[92m06-28 11:33:26[0m Protocol #1 Error (MPJPE):188.82716735654242mm
+[92m06-28 11:33:26[0m Protocol #2 Error (P-MPJPE):129.40729418338208mm
+[92m06-28 11:33:26[0m ----------
+[92m06-28 11:33:26[0m Layer ste_0 norm-space error: 0.7565
+[92m06-28 11:33:26[0m Layer tte_0 norm-space error: 0.5298
+[92m06-28 11:33:26[0m Layer ste_1 norm-space error: 0.5208
+[92m06-28 11:33:26[0m Layer tte_1 norm-space error: 0.4926
+[92m06-28 11:33:26[0m Layer ste_2 norm-space error: 0.4604
+[92m06-28 11:33:26[0m Layer tte_2 norm-space error: 0.3579
+[92m06-28 11:33:26[0m Layer ste_3 norm-space error: 0.4164
+[92m06-28 11:33:26[0m Layer tte_3 norm-space error: 0.5047
+[92m06-28 11:33:26[0m Layer ste_4 norm-space error: 0.4507
+[92m06-28 11:33:26[0m Layer tte_4 norm-space error: 0.3253
+[92m06-28 11:33:26[0m Layer ste_5 norm-space error: 0.4010
+[92m06-28 11:33:26[0m Layer tte_5 norm-space error: 0.3346
+[92m06-28 11:33:26[0m Layer ste_6 norm-space error: 0.3017
+[92m06-28 11:33:26[0m Layer tte_6 norm-space error: 0.2906
+[92m06-28 11:33:26[0m Layer ste_7 norm-space error: 0.2549
+[92m06-28 11:33:26[0m Layer tte_7 norm-space error: 0.2225
+[92m06-28 11:33:26[0m Layer ste_8 norm-space error: 0.1921
+[92m06-28 11:33:26[0m Layer tte_8 norm-space error: 0.1296
+[92m06-28 11:33:26[0m Layer ste_9 norm-space error: 0.1127
+[92m06-28 11:33:26[0m Layer tte_9 norm-space error: 0.1102
+[92m06-28 11:33:26[0m [1] time 19.05 lr 0.000040 3d_train 0.132127 e1 188.827167 e2 129.407294
+[92m06-28 11:33:26[0m Remaining training time: 0:20:50.320264
+[92m06-28 11:33:26[0m Saving checkpoint to /home/ubuntu/experiments/kinecmamba/experiments/results/C1_ssi_msm_2026_06_28_T_19_12_35/latest_epoch.bin
+[92m06-28 11:33:26[0m Saving checkpoint to /home/ubuntu/experiments/kinecmamba/experiments/results/C1_ssi_msm_2026_06_28_T_19_12_35/best_epoch.bin
