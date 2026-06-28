@@ -58,6 +58,7 @@ def main():
     # --- Check 1: Model instantiation ---
     print('\n[check 1] Model instantiation')
     try:
+        use_gat_head = getattr(cfg, 'use_gat_head', False)
         model = PoseMamba(
             num_frame=cfg.maxlen,
             num_joints=cfg.num_joints,
@@ -65,6 +66,7 @@ def main():
             embed_dim_ratio=cfg.dim_feat,
             mlp_ratio=cfg.mlp_ratio,
             depth=cfg.depth,
+            use_gat_head=use_gat_head,
         )
         check(True, 'PoseMamba created successfully')
     except Exception as e:

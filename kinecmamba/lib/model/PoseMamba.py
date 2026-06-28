@@ -34,8 +34,10 @@ import math
 import numpy as np
 
 from lib.model.mambablocks import BiSTSSMBlock
+from lib.model.modules.head_gat import HeadGAT
+
 class  PoseMamba(nn.Module):
-    def __init__(self, num_frame=9, num_joints=17, in_chans=2, embed_dim_ratio=256, depth=6, mlp_ratio=2., drop_rate=0., drop_path_rate=0.2,  norm_layer=None):
+    def __init__(self, num_frame=9, num_joints=17, in_chans=2, embed_dim_ratio=256, depth=6, mlp_ratio=2., drop_rate=0., drop_path_rate=0.2,  norm_layer=None, use_gat_head=False):
         """    ##########hybrid_backbone=None, representation_size=None,
         Args:
             num_frame (int, tuple): input frame number
@@ -86,10 +88,13 @@ class  PoseMamba(nn.Module):
         self.Spatial_norm = norm_layer(embed_dim_ratio)
         self.Temporal_norm = norm_layer(embed_dim)
 
-        self.head = nn.Sequential(
-            nn.LayerNorm(embed_dim),
-            nn.Linear(embed_dim , out_dim),
-        )
+        if use_gat_head:
+            self.head = HeadGAT(embed_dim, num_joints=num_joints, out_dim=out_dim)
+        else:
+            self.head = nn.Sequential(
+                nn.LayerNorm(embed_dim),
+                nn.Linear(embed_dim , out_dim),
+            )
 
 
     def STE_forward(self, x):
@@ -135,8 +140,13 @@ class  PoseMamba(nn.Module):
         x = self.STE_forward(x)
         x = self.TTE_foward(x)
         x = self.ST_foward(x)
-        x = self.head(x)
-        x = x.view(b, f, n, -1)
+        if isinstance(self.head, HeadGAT):
+            x = rearrange(x, 'b f n d -> (b f) n d')
+            x = self.head(x)
+            x = rearrange(x, '(b f) n d -> b f n d', b=b, f=f)
+        else:
+            x = self.head(x)
+            x = x.view(b, f, n, -1)
         return x
 
 
