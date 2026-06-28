@@ -1,4 +1,12 @@
 # Hypotheses Bank
+*Updated: 2026-06-28 — Added feasibility assessments, kill signals, pre-check protocols, and revised priorities*
+
+## Changelog
+- **2026-06-28:** Added `Feasibility` and `Kill Signal` columns to all hypotheses.
+  A2 moved to P0 (1 LOC — confidence already in data). A5 moved to P0 (reuses existing code).
+  Added pre-check protocol for each experiment. New W16 finding deepens confidence in A3.
+
+---
 
 ## Methodology
 
@@ -6,241 +14,204 @@ All hypotheses follow the loop engineering framework:
 - **Falsifiable:** State exactly what experimental result would disprove the hypothesis
 - **One intervention per experiment:** A+B combined cannot be interpreted
 - **Minimum viable change:** Simplest code change that tests the hypothesis
+- **Feasibility pre-check:** Before full training, run fast diagnostic. If kill signal triggers, REJECT.
 
 ## Priority Definitions
 
 | Priority | Criteria | Action |
 |----------|----------|--------|
-| **P0** | Evidence level ≥ 4, Δ > 0.3mm, ≤ 80 LOC | Do immediately |
-| **P1** | Evidence ≥ 3, Δ > 0.2mm, novelty or compound value | Do after P0 |
-| **P2** | Evidence ≥ 1, Δ > 0.1mm | Do if P0/P1 exhausted |
+| **P0** | Evidence level ≥ 4, Δ > 0.3mm, **feasibility ≥ 95%** | Do immediately |
+| **P1** | Evidence ≥ 3, Δ > 0.2mm, feasibility ≥ 60% | Do after P0 |
+| **P2** | Evidence ≥ 1, Δ > 0.1mm, any feasibility | Do if P0/P1 exhausted |
 | **P3** | Speculative or high cost | Defer indefinitely |
 
-**Evidence scores:** 5 = proven on same benchmark, 3 = multiple papers same domain,
-1 = single paper or related domain, 0 = speculative.
+## Feasibility Scores
+- 🔵 **100%** — zero risk, guaranteed to run. Config change or 1 LOC.
+- 🟢 **90-95%** — trivial implementation, reuses existing code, low risk.
+- 🟡 **50-70%** — non-trivial integration into SSM internals. Must run pre-check before full training.
+- 🔴 **<50%** — high implementation risk or data dependency. Only if high-ROI phases exhausted.
 
 ---
 
-## H12: Learnable Skeleton Adjacency (P0, NEW)
-
-**Code:** `exp01_learnable_adj`
+## H12/A3: Learnable Skeleton Adjacency (P0, HIGHEST ROI)
 
 | Field | Value |
 |-------|-------|
-| **Hypothesis** | The hardcoded `plus_poselimbs` indices create an asymmetric, non-learnable skeleton prior with no gradient flow. Replacing them with a learnable adjacency matrix with proper backward gradient propagation improves topology modeling and per-joint accuracy |
-| **Mechanism** | Replace `indices = [0,0,1,2,3,0,4,5,6,8,11,12,13,8,14,15,16]` with a learnable `W ∈ ℝ^(17×17)` parameter. Path 0 becomes `x + einsum('bchw,ij->bcih', x, W)` instead of `x + x[..., indices]`. Fix `CrossScan_learnable.backward()` to propagate gradients through W via `scatter_add_` or `einsum` backward (autograd handles this naturally if implemented with `torch.einsum`). Symmetry constraint: W = (W + W^T) / 2 to enforce undirected skeleton graph |
-| **Evidence** | **Level 4** — Direct code analysis proves gradient gap exists. Literature: every GCN paper shows learnable adjacency improves over fixed. This is a strict superset of the existing hardcoded approach |
+| **Hypothesis** | The hardcoded `plus_poselimbs` indices create an asymmetric, non-learnable skeleton prior with **zero gradient flow** (confirmed bug — backward is straight-through estimator). Replacing with a learnable adjacency matrix with proper backward propagation improves topology modeling and per-joint accuracy |
+| **Mechanism** | Replace `CrossScan_plus_poselimbs` (broken backward) with `CrossScan_learnable` using `torch.einsum('bchw,ij->bcih', x, W)` for proper autograd. W ∈ ℝ^(17×17) with symmetry constraint. |
+| **Evidence** | **Level 4** — Direct code analysis proves gradient gap exists. W16 confirms backward is straight-through. |
 | **Est. Δ** | **-0.4mm** P1 MPJPE (from fixing gradient gap + data-driven topology) |
-| **Cost** | ~40 LOC (new `CrossScan_learnable`/`CrossMerge_learnable` classes, `W` parameter in BiSTSSM, backward fix) |
-| **Dependency** | None — replaces plus_poselimbs at leaf level |
-| **Novelty** | **YES** — No Mamba-based HPE paper uses learnable skeleton adjacency within the SSM scan. All existing work uses hardcoded indices (PoseMamba), GCN feature fusion (PoseMagic), or stride partitions (SasMamba) |
+| **Cost** | ~40 LOC |
+| **Feasibility** | 🟢 **95%** |
+| **Kill Signal** | After 1 epoch: `W.softmax(dim=-1).mean() ≈ 1/17` (uniform weights) → no topology learning → REJECT |
+| **Pre-check** | `python -c "print(model.learnable_adj.softmax(dim=-1).mean().item())"` — should NOT be 1/17 |
 
 **Falsification:** If Δ > -0.1mm, then the specific `plus_poselimbs` indices are near-optimal and gradient flow is unnecessary.
 
-**Implementation sketch:**
-```python
-class CrossScan_learnable(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, x, W):
-        # Path 0: x + x @ W^T  (learnable adjacency mixing)
-        mixing = torch.einsum('bchw,ij->bcih', x, W)
-        xs0 = (x + mixing).reshape(B, C, -1)
-        # Paths 1-3: standard transpose + flips
-        ...
-    
-    @staticmethod
-    def backward(ctx, *grad_outputs):
-        # Autograd handles W gradient through einsum backward
-        # Standard backward for paths 1-3
-        ...
-```
-
 ---
 
-## H1: GCN-Mamba Dual-Stream (P0)
-
-**Code:** `exp02_gcn_mamba`
+## H1/B1: GCN-Mamba Dual-Stream (P1, FEASIBILITY GATED)
 
 | Field | Value |
 |-------|-------|
 | **Hypothesis** | PoseMamba's accuracy is bottlenecked by Mamba's inability to model local joint graph topology. Adding a parallel GCN stream with learnable adaptive fusion will improve MPJPE by ≥0.9mm |
-| **Mechanism** | Spatial GCN (17-node skeleton adjacency, 2 layers) + temporal conv (1D over T, kernel=3) + learnable α fusion weight |
-| **Evidence** | **Level 5** — PoseMagic (AAAI 2025) proves this exact intervention works on the same H36M benchmark, confirmed by AGMamba (SIVP 2026), HGMamba (arXiv 2025) |
+| **Mechanism** | Spatial GCN (17-node skeleton adjacency, 2 layers) + temporal conv + learnable α fusion. If α → 0, GCN contributes nothing. |
+| **Evidence** | **Level 5** — PoseMagic (AAAI 2025) proves this exact intervention works on the same H36M benchmark, confirmed by AGMamba, HGMamba |
 | **Est. Δ** | **-0.9mm** P1 MPJPE |
-| **Cost** | ~80 LOC (new GCNModule class, fusion logic in PoseMamba.py) |
-| **Dependency** | None — runs in parallel with existing Mamba stream |
+| **Cost** | ~80 LOC (highest of all P0/P1 experiments) |
+| **Feasibility** | 🟡 **60%** |
+| **Kill Signal** | After 5 epochs: `α.mean() < 0.1` → GCN branch ignored → REJECT |
+| **Pre-check** | Monitor `α` during training. Log to wandb every epoch. |
 
-**Falsification:** If Δ < 0.2mm, then GCN-Mamba dual-stream does not transfer to PoseMamba's SSM variant (PoseMagic uses a different Mamba implementation).
-
-**Simplest test:**
-```python
-self.gcn = GCN(in_dim=64, hidden_dim=64, num_joints=17)
-self.temporal_conv = nn.Conv1d(64, 64, kernel_size=3, padding=1)
-self.alpha = nn.Parameter(torch.tensor(0.5))
-# Fusion during forward
-gcn_out = self.temporal_conv(self.gcn(x).permute(0,2,1)).permute(0,2,1)
-out = self.alpha * mamba_out + (1 - self.alpha) * gcn_out
-```
+**Falsification:** If α → 0 or Δ < 0.2mm, GCN-Mamba dual-stream does not transfer to PoseMamba's SSM variant.
 
 ---
 
-## H11: SAMA-Style State-Level Fusion (P1)
-
-**Code:** `exp03_sama_fusion`
+## H11/C1: SAMA-Style State-Level Fusion (P1)
 
 | Field | Value |
 |-------|-------|
-| **Hypothesis** | Feature-level dual-stream fusion (H1) is post-hoc. State-level fusion — modifying the SSM state transition to incorporate joint topology — yields additional improvement beyond feature-level fusion alone. Combining both (H1+H11) is novel and additive |
-| **Mechanism** | Structure-aware State Integrator (adapted from SAMA, ICCV 2025): before SSM state update, aggregate neighboring joint states via learned adjacency weights. State transition becomes `sₜ = A·sₜ₋₁ + B·(xₜ + Σⱼ wᵢⱼ · sⱼ₋₁)` where `wᵢⱼ` are topology weights |
-| **Evidence** | **Level 3** — SAMA (ICCV 2025), MambaTopFusion GEM (CVIU 2026). The combination with H1 is **unexplored** in literature |
-| **Est. Δ** | **-0.6mm** additive beyond H1 (cumulative with H12+H1: up to -1.9mm) |
-| **Cost** | ~150 LOC (modify `forward_corev2` in mambablocks.py) |
-| **Dependency** | Test after H1 proven. If H1 confirmed, test H11 on top of H1 baseline |
-| **Novelty** | **YES** — No paper combines state-level fusion (SAMA) + feature-level fusion (PoseMagic). This is a novel compound architecture |
-
-**Falsification:** If H11 combined with H1 yields Δ < 0.2mm beyond H1 alone, state-level and feature-level fusion address the same bottleneck and are redundant.
+| **Hypothesis** | State-level fusion (modifying SSM state transition with topology) adds value beyond feature-level fusion. |
+| **Mechanism** | Structure-aware State Integrator: modify `forward_corev2` to incorporate topology-weighted state aggregation before selective scan output. |
+| **Evidence** | **Level 3** — SAMA (ICCV 2025), MambaTopFusion GEM (CVIU 2026) |
+| **Est. Δ** | **-0.6mm** additive beyond H1 |
+| **Cost** | ~50 LOC added to `forward_corev2` |
+| **Feasibility** | 🟡 **70%** |
+| **Kill Signal** | If combined with A3 and the adjacency matrix already captures topology, SSI may be redundant. Check: does SSI change the output at all in first forward pass? If `||SSI_output - original_output|| < 1e-6`, no effect → REJECT |
 
 ---
 
-## H2: Structure-Aware Stride Scan (P2)
-
-**Code:** Deferred
+## A2: Confidence Score as 3rd Input Channel (P0, 1 LOC)
 
 | Field | Value |
 |-------|-------|
-| **Hypothesis** | Flat 4-direction scan destroys joint adjacency. Stride-based scanning over skeleton preserves local structure |
-| **Mechanism** | Replace CrossScan with grouped stride scan over 4 body-part partitions |
-| **Evidence** | **Level 3** — SasMamba (WACV 2026) |
-| **Est. Δ** | -0.5mm P1 MPJPE |
-| **Cost** | ~100 LOC |
-| **Dependency** | Deferred — test after compound baseline |
+| **Hypothesis** | Confidence score `c ∈ [0,1]` is already in the data pipeline (`DataReaderH36M` reads and concatenates it). Setting `no_conf: False` + `in_chans=2→3` adds this signal to the model, allowing it to discount low-confidence joints. |
+| **Mechanism** | 1 LOC change: switch `in_chans=2→3` in `PoseMamba.py` line 38, set `no_conf: False` in config. Confidence is already normalized and available as 3rd channel of motion_2d tensors. |
+| **Evidence** | **Level 4** — Code audit proves confidence is in the data. AugLift (2025) proves the value of confidence for MPJPE. |
+| **Est. Δ** | **-0.5mm** P1 MPJPE |
+| **Cost** | **1 LOC** (not 5 as previously estimated) + 1 config flag |
+| **Feasibility** | 🔵 **100%** |
+| **Kill Signal** | N/A — zero risk of regression. If Δ > +0.1mm (impossible without bug), it would mean the model cannot utilize confidence — confidence signal is too noisy. |
+
+**Why this was underestimated:** All previous estimates said "add confidence column from SH detection output." The code already does this — `DataReaderH36M.read_2d()` has `if self.read_confidence` block at lines 45-57. The 3rd channel is present in every batch; `no_conf: True` strips it at `train.py:224`.
 
 ---
 
-## H6: Bone-Aware Module (P2)
-
-**Code:** Deferred
+## A5: Bone Vector Auxiliary Input (P0, 15 LOC)
 
 | Field | Value |
 |-------|-------|
-| **Hypothesis** | Bone direction/length vectors provide spatial inductive bias beyond joint coordinates |
-| **Mechanism** | Compute 16 bone vectors, embed via Linear, fuse with joint features pre-SSM |
+| **Hypothesis** | Bone direction (θ, φ) + length (l) per bone provides explicit topology structure. |
+| **Mechanism** | Compute 16 bone vectors using existing `get_limb_lens` from `loss.py`, broadcast to 17 joints, concatenate with (x, y) → `in_chans=2→5`. |
 | **Evidence** | **Level 3** — MambaTopFusion (CVIU 2026) |
-| **Est. Δ** | -0.4mm |
-| **Cost** | ~60 LOC |
-| **Dependency** | Deferred — test after compound baseline |
+| **Est. Δ** | **-0.3 to -0.5mm** |
+| **Cost** | ~15 LOC |
+| **Feasibility** | 🔵 **95%** |
+| **Kill Signal** | Δ > +0.1mm at Stage 3. If bone vectors are collinear with joint coordinates (they shouldn't be), no gain. |
+
+**Key efficiency:** `loss.py:100-114` already has `get_limb_lens()`. `loss.py:150-184` has `get_angles()`. Both compute bone-specific features. A5 can import these directly rather than re-implementing skeleton math.
 
 ---
 
-## H8: Sparse Hybrid Attention (P2)
-
-**Code:** Deferred
+## B2: Head-Aware Auxiliary Branch (P1, 25 LOC)
 
 | Field | Value |
 |-------|-------|
-| **Hypothesis** | 2 sparse attention layers improve long-range temporal modeling over pure SSM |
-| **Mechanism** | Replace 2 of 10 BiSTSSMBlocks with multi-head self-attention |
-| **Evidence** | **Level 3** — VIMCAN (CVPR 2026), Jamba-1.5 (2025) |
-| **Est. Δ** | -0.3mm |
-| **Cost** | ~60 LOC |
-| **Dependency** | Deferred |
+| **Hypothesis** | GAT on {0,7,8,9,10} subgraph with weighted loss reduces head/neck MPJPE ≥ 1.5mm. |
+| **Mechanism** | 2-layer GAT on head subgraph, auxiliary loss `λ_head * MPJPE_head` added to main loss. |
+| **Evidence** | **Level 2** — PoseMamba supplementary acknowledges head/neck underperformance. |
+| **Est. Δ** | **-1.5mm** head/neck |
+| **Cost** | ~25 LOC |
+| **Feasibility** | 🟢 **90%** |
+| **Kill Signal** | `λ_head * head_loss / total_loss < 0.01` after 5 epochs → branch contributes nothing → REJECT |
 
 ---
 
-## H9: Mamba-2 SSD Kernel (P3)
-
-**Code:** Deferred
+## A4: Per-Joint Timescale Modulator / MSM (P1, 25 LOC, HIGH RISK)
 
 | Field | Value |
 |-------|-------|
-| **Hypothesis** | Increasing state dimension N=16→64 with Mamba-2 SSD improves capacity |
-| **Mechanism** | Replace selective_scan kernel with Mamba-2 SSD |
-| **Evidence** | **Level 4** — Mamba-2 (ICML 2024) |
-| **Est. Δ** | -0.2mm |
-| **Cost** | ~200 LOC |
-| **Dependency** | Deferred — significant engineering effort |
+| **Hypothesis** | Per-joint Δ (discretisation step) from local motion magnitude reduces MPJPE ≥ 0.3mm. |
+| **Mechanism** | Compute motion = x_t - x_{t-1}, pass through 1D conv to get per-joint Δ, use as SSM time step. |
+| **Evidence** | **Level 5** — SAMA (ICCV 2025) proves this. |
+| **Est. Δ** | **-0.3 to -0.5mm** |
+| **Cost** | ~25 LOC |
+| **Feasibility** | 🟡 **60%** |
+| **Kill Signal** | After 1 epoch: `delta_j.view(17, -1).std(dim=0).mean() < 0.01` → joints have uniform Δ → no per-joint specialization → REJECT |
+
+**Risk detail:** The SSM in PoseMamba operates on a 2D (T×J) tensor flattened to 1D for the selective scan. Per-joint delta requires reshaping the delta computation to maintain joint identity. The `forward_corev2` function computes delta via `dts = F.conv1d(...)` on the flattened 1D representation, where all joints are interleaved. Disentangling this is the core challenge.
 
 ---
 
-## H5: Decoupled S-T Scans (P3)
-
-**Code:** Deferred
+## B3: Scan Order Grid Search (P2, Config Only)
 
 | Field | Value |
 |-------|-------|
-| **Hypothesis** | Separate spatial and temporal SSM passes improve dimension separation over entangled 2D scan |
-| **Mechanism** | Two forward_corev2 passes: one spatial, one temporal |
-| **Est. Δ** | -0.5mm |
-| **Cost** | ~100 LOC |
-| **Dependency** | Deferred |
+| **Hypothesis** | At least one of 8 alternative scan orderings is ≥ 0.3mm better than original. |
+| **Mechanism** | 8 configs with different scan orders (BFS, DFS, bilateral, variance-sorted, etc.). Run Phase 2 overfit ranker first, then top-2 survivors get Stage 3. |
+| **Evidence** | **Level 2** — SAMA mentions scan order sensitivity. |
+| **Est. Δ** | **-0.3mm** |
+| **Cost** | Config only |
+| **Feasibility** | 🔵 **100%** |
+| **Kill Signal** | Phase 2 overfit rank: bottom 6 eliminated. Top-2 must show Δ < -0.1mm vs baseline at Phase 2. |
 
 ---
 
-## H7: Head-Aware Branch (P3)
-
-**Code:** Deferred
+## A6: AugLift UADD Depth (P2, 10 LOC + Precompute)
 
 | Field | Value |
 |-------|-------|
-| **Hypothesis** | GCN-Mamba already subsumes head/neck improvements (H7) |
-| **Mechanism** | N/A — skip if H1 confirmed |
-| **Est. Δ** | Subsumed by H1 |
-| **Dependency** | Cancelled if H1 confirms |
+| **Hypothesis** | 6D input (x,y,c,d,d_min,d_max) improves ID ≥ 0.3mm + OOD ≥ 5%. |
+| **Mechanism** | Precompute depth with Depth Anything v2 (requires ~50GB disk + ~3hrs GPU). Concatenate depth stats as extra channels. |
+| **Evidence** | **Level 3** — AugLift (2025). |
+| **Est. Δ** | **-0.3mm ID, -5% OOD** |
+| **Cost** | ~10 LOC + precompute pipeline |
+| **Feasibility** | 🟡 **50%** |
+| **Kill Signal** | Check correlation between depth channels and GT Z on H3.6M. If > 0.95, depth leaks GT → ID gains are inflated → REJECT (or only evaluate on OOD). |
 
 ---
 
-## H10: RoPE + QKNorm (P3)
+## Hypothesis Bank Summary (Updated)
 
-**Code:** Deferred
-
-| Field | Value |
-|-------|-------|
-| **Hypothesis** | SSM lacks explicit position encoding. RoPE + QKNorm improves order awareness |
-| **Est. Δ** | -0.2mm |
-| **Cost** | ~40 LOC |
-| **Dependency** | Deferred |
-
----
-
-## Hypothesis Bank Summary
-
-| ID | Hypothesis | Ev | Est Δ | LOC | Priority | Status |
-|----|-----------|----|-------|-----|----------|--------|
-| **H12** | **Learnable skeleton adjacency (NEW)** | **4** | **-0.4mm** | **40** | **P0** | Ready |
-| H1 | GCN-Mamba dual-stream | 5 | -0.9mm | 80 | **P0** | Ready |
-| H11 | SAMA-style state-level fusion | 3 | -0.6mm* | 150 | P1 | Ready |
-| H12+H1+H11 | **Compound (novel)** | **4** | **-1.9mm** | **270** | **P0** | **Design** |
-| H2 | Structure-aware stride scan | 3 | -0.5mm | 100 | P2 | Deferred |
-| H6 | Bone-aware module | 3 | -0.4mm | 60 | P2 | Deferred |
-| H8 | Sparse hybrid attention | 3 | -0.3mm | 60 | P2 | Deferred |
-| H5 | Decoupled S-T scans | 3 | -0.5mm | 100 | P3 | Deferred |
-| H9 | Mamba-2 SSD (N=64) | 4 | -0.2mm | 200 | P3 | Deferred |
-| H7 | Head-aware branch | 1 | subsumed | — | P3 | Cancelled |
-| H10 | RoPE + QKNorm | 3 | -0.2mm | 40 | P3 | Deferred |
-
-*H11 Δ is additive beyond H1; H12 is independent and stacks with H1+H11.
+| ID | Hypothesis | Ev | Est Δ | LOC | Priority | Feasibility | Kill Signal | Status |
+|----|-----------|----|-------|-----|----------|-------------|-------------|--------|
+| **A2** | **Confidence input** | **4** | **-0.5mm** | **1** | **P0** | 🔵 **100%** | None — zero risk | **Ready** |
+| **A5** | **Bone vectors** | **3** | **-0.3mm** | **15** | **P0** | 🔵 **95%** | Δ > +0.1mm | **Ready** |
+| **A3** | **Learnable adj (bug fix)** | **4** | **-0.4mm** | **40** | **P0** | 🟢 **95%** | W_adj uniform | **Ready** |
+| B2 | Head-aware GAT | 2 | -1.5mm (head) | 25 | P1 | 🟢 90% | λ→0 | Ready |
+| A4 | MSM per-joint Δ | 5 | -0.3mm | 25 | P1 | 🟡 60% | δ_std ≈ 0 | Ready |
+| C1 | A3+A4 combined | 5 | -0.8mm | 55 | P1 | 🟡 70% | Depends on A3+A4 | Pending |
+| B1 | HyperGCN dual-stream | 5 | -0.9mm | 80 | P1 | 🟡 60% | α→0 | Ready |
+| B3 | Scan order search | 2 | -0.3mm | 0 | P2 | 🔵 100% | Bottom 6 cut | Ready |
+| A6 | AugLift depth | 3 | -0.3mm ID | 10+pre | P2 | 🟡 50% | depth-GT corr | Ready |
+| C2 | A2+C1 combined | 3 | -1.0mm | 60 | P2 | 🟢 85% | Depends | Deferred |
+| H2 | Stride scan | 3 | -0.5mm | 100 | P2 | 🟡 50% | — | Deferred |
+| H5 | Decoupled S-T | 3 | -0.5mm | 100 | P3 | 🟡 40% | — | Deferred |
+| H9 | Mamba-2 SSD | 4 | -0.2mm | 200 | P3 | 🔴 30% | — | Deferred |
+| H10 | RoPE + QKNorm | 3 | -0.2mm | 40 | P3 | 🟡 50% | — | Deferred |
 
 ---
 
-## Execution Order
+## Execution Order (Final, June 2026)
 
 ```
-Phase 1 (Immediate — proven + novel, highest ROI)
-  Step 1: Baseline (Exp 00) with wandb-only + layer-wise diagnostics
-  Step 2: H12 → Learnable skeleton adjacency (Exp 01)   [40 LOC, Δ=-0.4mm]
-  Step 3: H1  → GCN-Mamba dual-stream (Exp 02)          [80 LOC, Δ=-0.9mm]
-  Step 4: H12+H1 compound (no extra code)                [cumulative Δ=-1.3mm]
-
-Phase 2 (Novel compound)
-  Step 5: H11 → SAMA-style state fusion (Exp 03)        [150 LOC, Δ=-0.6mm*]
-  Step 6: H12+H1+H11 full compound                       [cumulative Δ=-1.9mm target]
-
-Phase 3 (If time permits — incremental)
-  Step 7: H2  → Stride scan                             [Δ=-0.5mm]
-  Step 8: H6  → Bone module                              [Δ=-0.4mm]
-  Step 9: H8  → Hybrid attention                         [Δ=-0.3mm]
+Phase 1 — Zero Risk (DO NOW, feasibility ≥ 95%)
+  Step 1: A1 — Baseline repro (fix L config first!)
+  Step 2: A2 — Confidence input (1 LOC)     ← can batch with A1?
+  Step 3: A5 — Bone vectors (15 LOC)
+  
+Phase 2 — Bug Fix (proven improvement)
+  Step 4: A3 — Learnable adjacency (fixes plus_poselimbs gradient bug)
+  
+Phase 3 — Conditional (feasibility 60-90%, with pre-checks)
+  Step 5: B2 — Head-aware GAT (90%, independent)
+  Step 6: A4 — MSM per-joint delta (60%, kill if δ_j uniform)
+  Step 7: C1 — A3+A4 combined (70%, only if both pass)
+  
+Phase 4 — Speculative (feasibility 50-60%)
+  Step 8: B1 — HyperGCN (60%, kill if α→0)
+  Step 9: B3 — Scan order (100% easy, low Δ expected)
+  Step 10: A6 — AugLift depth (50%, high disk + leakage risk)
 ```
 
-Key insight: H12 and H1 address different weaknesses (gradient flow vs missing topology).
-They are additive. H11 addresses a third dimension (state-level vs feature-level).
-The full compound is novel — no paper combines all three.
+**Decision rule:** After Phase 2, if cumulative Δ ≥ -1.2mm (A2+A5+A3), skip Phase 3-4 and go directly to publication sprint (ablation study, 3DPW eval, paper writing).
