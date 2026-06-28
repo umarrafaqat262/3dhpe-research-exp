@@ -34,8 +34,10 @@ import math
 import numpy as np
 
 from lib.model.mambablocks import BiSTSSMBlock
+from lib.model.modules.ssi import LearnableAdjacency
+from lib.model.modules.msm import PerJointDelta
 class  PoseMamba(nn.Module):
-    def __init__(self, num_frame=9, num_joints=17, in_chans=2, embed_dim_ratio=256, depth=6, mlp_ratio=2., drop_rate=0., drop_path_rate=0.2,  norm_layer=None):
+    def __init__(self, num_frame=9, num_joints=17, in_chans=2, embed_dim_ratio=256, depth=6, mlp_ratio=2., drop_rate=0., drop_path_rate=0.2,  norm_layer=None, use_ssi=False, use_msm=False):
         """    ##########hybrid_backbone=None, representation_size=None,
         Args:
             num_frame (int, tuple): input frame number
@@ -86,6 +88,16 @@ class  PoseMamba(nn.Module):
         self.Spatial_norm = norm_layer(embed_dim_ratio)
         self.Temporal_norm = norm_layer(embed_dim)
 
+        self.use_ssi = use_ssi
+        if use_ssi:
+            self.ssi = LearnableAdjacency(num_joints, embed_dim_ratio)
+        self.use_msm = use_msm
+        if use_msm:
+            d_inner = int(2.0 * embed_dim_ratio)
+            self.msm = PerJointDelta(num_joints, d_inner)
+            for blk in self.STEblocks:
+                blk.op.msm = self.msm
+
         self.head = nn.Sequential(
             nn.LayerNorm(embed_dim),
             nn.Linear(embed_dim , out_dim),
@@ -93,9 +105,11 @@ class  PoseMamba(nn.Module):
 
 
     def STE_forward(self, x):
-        b, f, n, c = x.shape  ##### b is batch size, f is number of frames, n is number of joints, c is channel size?
+        b, f, n, c = x.shape
         x = rearrange(x, 'b f n c  -> (b f) n c', )
         x = self.Spatial_patch_to_embedding(x)
+        if self.use_ssi:
+            x = self.ssi(x)
         x += self.Spatial_pos_embed
         x = self.pos_drop(x)
         x = rearrange(x, '(b f) n c  -> b f n c', f=f)
