@@ -20,7 +20,7 @@ kinecmamba/configs/pose3d/MB_ft_h36m_global.yaml
 kinecmamba/configs/pose3d/MB_ft_h36m_global_lite.yaml
 kinecmamba/configs/pose3d/MB_train_h36m.yaml
 kinecmamba/configs/pose3d/PoseMamba_train_h36m_B.yaml
-kinecmamba/configs/pose3d/PoseMamba_train_h36m_L.yaml
+
 kinecmamba/convert_img2video.py
 kinecmamba/demo.sh
 kinecmamba/eval.sh
