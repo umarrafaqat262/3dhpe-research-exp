@@ -1,2 +1,2 @@
 experiment,timestamp,config,params,epochs,train_time,mpjpe_p1_last,mpjpe_p1_best,p_mpjpe_last,p_mpjpe_best,loss_3d,delta_vs_baseline
-B1_hypergcn,2026-06-29T10:12:46.221634,exp_B1_hypergcn.yaml,1478473,24,29204.2,54.82731342879561,54.73203055115484,44.894757196947985,44.894757196947985,0.023142,
+B1_hypergcn,2026-06-29T10:20:28.855383,exp_B1_hypergcn.yaml,1478473,30,8.6,,,,,,

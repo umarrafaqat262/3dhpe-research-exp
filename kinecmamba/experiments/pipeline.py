@@ -74,6 +74,26 @@ def extract_mpjpe_last_epoch(text):
     return p1_last, p1_best, p2_last, p2_best, loss
 
 
+def find_latest_checkpoint(tier_dir, name):
+    """Find latest_epoch.bin from any timestamped subdirectory or base dir."""
+    # Check base dir first
+    base_bin = os.path.join(tier_dir, name, 'latest_epoch.bin')
+    if os.path.exists(base_bin):
+        return base_bin
+    # Check timestamped subdirs (most recent by name sort)
+    pattern = os.path.join(tier_dir, '%s_2026*/latest_epoch.bin' % name)
+    candidates = sorted(glob.glob(pattern))
+    if candidates:
+        return candidates[-1]
+    return None
+
+
+def load_checkpoint_epoch(bin_path):
+    """Load checkpoint and return epoch number."""
+    ckpt = torch.load(bin_path, map_location='cpu', weights_only=False)
+    return ckpt.get('epoch', 0)
+
+
 def run_experiment(name, config_file, expected_params, num_epochs, use_wandb=True):
     config_path = os.path.join(CONFIG_DIR, config_file)
     tier_dir = 'tier3' if num_epochs <= 5 else 'tier4'
@@ -86,12 +106,13 @@ def run_experiment(name, config_file, expected_params, num_epochs, use_wandb=Tru
     print('  Output: %s' % output_dir)
     print('%s' % ('=' * 70))
 
-    # Check for existing checkpoint to resume
-    latest_bin = os.path.join(output_dir, 'latest_epoch.bin')
-    if os.path.exists(latest_bin):
-        checkpoint = torch.load(latest_bin, map_location='cpu')
-        resume_epoch = checkpoint.get('epoch', 0)
-        print('  RESUMING from checkpoint epoch %d → %d epochs total' % (resume_epoch, num_epochs))
+    # Find existing checkpoint from ANY timestamped subdir or base dir
+    existing_ckpt = find_latest_checkpoint(os.path.join(RESULTS_DIR, tier_dir), name)
+    resume_epoch = 0
+    if existing_ckpt:
+        resume_epoch = load_checkpoint_epoch(existing_ckpt)
+        print('  FOUND checkpoint epoch %d at: %s' % (resume_epoch, existing_ckpt))
+        print('  Will resume → %d epochs total' % num_epochs)
     else:
         print('  Starting from scratch: %d epochs' % num_epochs)
 
@@ -110,6 +131,10 @@ def run_experiment(name, config_file, expected_params, num_epochs, use_wandb=Tru
     train_out = os.path.join(output_dir, 'train_log.txt')
     wandb_flag = 'True' if use_wandb else 'False'
     cmd = [PYTHON, TRAIN_SCRIPT, '--config', tmp_config, '-c', output_dir, '--wandb', wandb_flag]
+    # Pass -r with full path to existing checkpoint so train.py can find it
+    # even though train.py appends a timestamp to -c path
+    if existing_ckpt:
+        cmd.extend(['-r', existing_ckpt])
 
     print('  Started: %s' % datetime.now().strftime('%Y-%m-%d %H:%M'))
     start = time.time()
@@ -283,12 +308,10 @@ def main():
 
     for exp in TIER4_EXPERIMENTS:
         name, config, params, num_epochs = exp
-        # Check if already completed target epochs
-        exp_dir = os.path.join(tier4_dir, name)
-        latest_bin = os.path.join(exp_dir, 'latest_epoch.bin')
-        if os.path.exists(latest_bin):
-            ckpt = torch.load(latest_bin, map_location='cpu')
-            ckpt_epoch = ckpt.get('epoch', 0)
+        # Check if already completed target epochs (search all timestamped dirs)
+        existing_ckpt = find_latest_checkpoint(tier4_dir, name)
+        if existing_ckpt:
+            ckpt_epoch = load_checkpoint_epoch(existing_ckpt)
             if ckpt_epoch >= num_epochs:
                 print('\n  SKIP %s: already at epoch %d (target=%d)' % (name, ckpt_epoch, num_epochs))
                 # Still collect results from existing log

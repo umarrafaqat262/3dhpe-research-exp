@@ -1,0 +1,9 @@
+[92m06-29 10:16:45[0m {'accum_steps': 8, 'att_fuse': True, 'backbone': 'PoseMamba', 'batch_size': 4, 'checkpoint_frequency': 30, 'clip_len': 243, 'data_root': 'data/motion3d/MB3D_f243s81/', 'data_stride': 81, 'depth': 10, 'dim_feat': 64, 'dropout': 0.0, 'dt_file': 'h36m_sh_conf_cam_source_final.pkl', 'epochs': 30, 'finetune': False, 'flip': True, 'grad_clip_norm': 1.0, 'gt_2d': False, 'input_channels': 2, 'lambda_3d': 1.0, 'lambda_3d_velocity': 20.0, 'lambda_3dw': 0.0, 'lambda_a': 0.0, 'lambda_av': 0.0, 'lambda_diff': 0.5, 'lambda_lg': 0.0, 'lambda_lv': 0.0, 'lambda_scale': 0.5, 'learning_rate': 0.0002, 'lr_decay': 0.99, 'lr_scheduler': 'cosine', 'mask_T_ratio': 0.0, 'mask_ratio': 0.0, 'maxlen': 243, 'mlp_ratio': 2, 'no_conf': True, 'no_eval': False, 'noise': False, 'num_joints': 17, 'partial_train': None, 'rootrel': True, 'sample_stride': 1, 'subset_list': ['H36M-SH'], 'synthetic': False, 'train_2d': False, 'use_hypergcn': True, 'warmup_epochs': 5, 'weight_decay': 0.01, 'name': '_run_config'}
+[92m06-29 10:16:45[0m Number of GPUs found:1
+[92m06-29 10:16:48[0m Wandb initialized: B1_hypergcn_2026_06_29_T_18_16_45
+[92m06-29 10:16:48[0m Loading dataset...
+[92m06-29 10:16:49[0m INFO: Trainable parameter count:1478473
+[92m06-29 10:16:49[0m INFO: Training on 3518(3D) batches
+[92m06-29 10:16:49[0m Gradient accumulation steps: 8, effective batch size: 32
+[92m06-29 10:16:49[0m LR scheduler: cosine, warmup epochs: 5
+[92m06-29 10:16:49[0m Training epoch 0.

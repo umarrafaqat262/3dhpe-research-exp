@@ -10,7 +10,7 @@ depth: 10
 dim_feat: 64
 dropout: 0.0
 dt_file: h36m_sh_conf_cam_source_final.pkl
-epochs: 24
+epochs: 30
 finetune: false
 flip: true
 grad_clip_norm: 1.0

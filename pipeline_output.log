@@ -1,4 +1,4 @@
-Pipeline started: 2026-06-29 02:06
+Pipeline started: 2026-06-29 10:20
 Tier 3 results already collected (from earlier tier3.py run)
 
 Tier 3 corrected results already exist, skipping Tier 3 baseline run
@@ -14,20 +14,23 @@ A1_baseline_5ep         111.4      111.4       79.1       +0.0
 
 
 ###########################################################################
-#  TIER 4: Full training (24 epochs) — Top 2 + Baseline
+#  TIER 4: Full training (30 epochs) — Top 2 + Baseline
 ###########################################################################
 
 ======================================================================
-  TIER4: B1_hypergcn (24 epochs)
+  TIER4: B1_hypergcn (30 epochs)
   Config: exp_B1_hypergcn.yaml
   Output: /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/B1_hypergcn
 ======================================================================
-  Started: 2026-06-29 02:06
-  Finished: 10:12 (486.7 min)
-  MPJPE last epoch: 54.83
-  MPJPE best epoch: 54.73
-  P-MPJPE last:     44.89
-  P-MPJPE best:     44.89
+  FOUND checkpoint epoch 24 at: /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/B1_hypergcn_2026_06_29_T_10_06_05/latest_epoch.bin
+  Will resume → 30 epochs total
+  Started: 2026-06-29 10:20
+  Finished: 10:20 (0.1 min)
+  RC=1 (non-fatal, MPJPE captured from log)
+  MPJPE last epoch: N/A
+  MPJPE best epoch: N/A
+  P-MPJPE last:     N/A
+  P-MPJPE best:     N/A
   [saved] /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/tier4_results.csv
 
---- Git push: exp/tier4: B1_hypergcn complete (24 epochs) ---
+--- Git push: exp/tier4: B1_hypergcn complete (30 epochs) ---

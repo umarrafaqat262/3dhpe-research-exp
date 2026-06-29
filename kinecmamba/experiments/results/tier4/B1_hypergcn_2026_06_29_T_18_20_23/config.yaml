@@ -1,0 +1,167 @@
+_wandb:
+    value:
+        cli_version: 0.28.0
+        e:
+            xudtnyym91jqu7qt1misv16ba5hm3fuw:
+                args:
+                    - --config
+                    - /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/B1_hypergcn/_run_config.yaml
+                    - -c
+                    - /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/B1_hypergcn
+                    - --wandb
+                    - "True"
+                    - -r
+                    - /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/B1_hypergcn_2026_06_29_T_10_06_05/latest_epoch.bin
+                codePath: kinecmamba/train.py
+                codePathLocal: kinecmamba/train.py
+                cpu_count: 4
+                cpu_count_logical: 8
+                cudaVersion: "13.2"
+                disk:
+                    /:
+                        total: "50884108288"
+                        used: "42147926016"
+                email: msds24068@itu.edu.pk
+                executable: /home/ubuntu/miniforge3/envs/posemamba/bin/python
+                git:
+                    commit: 3961040aa6ac254a467f8a33df3931074a35e45a
+                    remote: git@github.com:umarrafaqat262/3dhpe-research-exp.git
+                gpu: NVIDIA L4
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ada
+                      cudaCores: 7424
+                      memoryTotal: "24152899584"
+                      name: NVIDIA L4
+                      uuid: GPU-bff281f5-9e9d-160c-4a01-f67b0d29aa7f
+                host: ip-172-31-37-221
+                memory:
+                    total: "32379994112"
+                os: Linux-6.17.0-1019-aws-x86_64-with-glibc2.39
+                program: /home/ubuntu/experiments/kinecmamba/experiments/../train.py
+                python: CPython 3.10.20
+                root: /home/ubuntu/experiments
+                startedAt: "2026-06-29T10:20:24.307935Z"
+                writerId: xudtnyym91jqu7qt1misv16ba5hm3fuw
+        m: []
+        python_version: 3.10.20
+        t:
+            "1":
+                - 1
+                - 41
+                - 49
+                - 63
+            "2":
+                - 1
+                - 41
+                - 49
+                - 63
+            "3":
+                - 3
+                - 13
+                - 16
+            "4": 3.10.20
+            "5": 0.28.0
+            "12": 0.28.0
+            "13": linux-x86_64
+accum_steps:
+    value: 8
+att_fuse:
+    value: true
+backbone:
+    value: PoseMamba
+batch_size:
+    value: 4
+checkpoint_dir:
+    value: /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/B1_hypergcn_2026_06_29_T_18_20_23
+checkpoint_frequency:
+    value: 30
+clip_len:
+    value: 243
+data_root:
+    value: data/motion3d/MB3D_f243s81/
+data_stride:
+    value: 81
+depth:
+    value: 10
+dim_feat:
+    value: 64
+dropout:
+    value: 0
+dt_file:
+    value: h36m_sh_conf_cam_source_final.pkl
+epochs:
+    value: 30
+finetune:
+    value: false
+flip:
+    value: true
+grad_clip_norm:
+    value: 1
+gt_2d:
+    value: false
+input_channels:
+    value: 2
+lambda_3d:
+    value: 1
+lambda_3d_velocity:
+    value: 20
+lambda_3dw:
+    value: 0
+lambda_a:
+    value: 0
+lambda_av:
+    value: 0
+lambda_diff:
+    value: 0.5
+lambda_lg:
+    value: 0
+lambda_lv:
+    value: 0
+lambda_scale:
+    value: 0.5
+learning_rate:
+    value: 0.0002
+lr_decay:
+    value: 0.99
+lr_scheduler:
+    value: cosine
+mask_T_ratio:
+    value: 0
+mask_ratio:
+    value: 0
+maxlen:
+    value: 243
+mlp_ratio:
+    value: 2
+model_params:
+    value: 1478473
+name:
+    value: _run_config
+no_conf:
+    value: true
+no_eval:
+    value: false
+noise:
+    value: false
+num_joints:
+    value: 17
+partial_train:
+    value: null
+rootrel:
+    value: true
+sample_stride:
+    value: 1
+subset_list:
+    value:
+        - H36M-SH
+synthetic:
+    value: false
+train_2d:
+    value: false
+use_hypergcn:
+    value: true
+warmup_epochs:
+    value: 5
+weight_decay:
+    value: 0.01
