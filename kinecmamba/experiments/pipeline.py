@@ -197,47 +197,52 @@ def main():
     tier3_file = os.path.join(RESULTS_DIR, 'tier3', 'tier3_results_corrected.csv')
     tier3_results = []
 
-    # ─── Tier 3補完: Run baseline at 5 epochs ───
-    print('\n' + '#' * 75)
-    print('#  TIER 3 SUPPLEMENT: Baseline at 5 epochs')
-    print('#' * 75)
+    # ─── Tier 3補完: Run baseline at 5 epochs (skip if already done) ───
     tier3_dir = os.path.join(RESULTS_DIR, 'tier3')
-    os.makedirs(tier3_dir, exist_ok=True)
-    baseline_5ep = run_experiment(*TIER3_BASELINE)
-    tier3_results.append(baseline_5ep)
-    save_results(tier3_results, tier3_file)
-
-    # Read existing tier3 results and add baseline
+    tier3_corrected = os.path.join(tier3_dir, 'tier3_results_corrected.csv')
     existing_tier3 = []
-    csv_path = os.path.join(tier3_dir, 'tier3_results.csv')
-    if os.path.exists(csv_path):
-        with open(csv_path) as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                # Fix: extract correct last-epoch values from logs
-                name = row['experiment']
-                log_files = list(glob.glob(os.path.join(tier3_dir, '%s_2026*/log.txt' % name)))
-                if log_files:
-                    with open(log_files[0]) as lf:
-                        log_text = lf.read()
-                    p1_last, p1_best, p2_last, p2_best, loss = extract_mpjpe_last_epoch(log_text)
-                    row['mpjpe_p1_last'] = p1_last
-                    row['mpjpe_p1_best'] = p1_best
-                    row['p_mpjpe_last'] = p2_last
-                    row['p_mpjpe_best'] = p2_best
-                    row['loss_3d'] = loss
-                    row['epochs'] = 5
-                existing_tier3.append(row)
 
-    all_tier3 = existing_tier3 + tier3_results
-    save_results(all_tier3, os.path.join(tier3_dir, 'tier3_results_corrected.csv'))
-    print_summary('TIER 3 CORRECTED RESULTS (5 epochs)', all_tier3, baseline_key='A1_baseline_5ep')
+    if os.path.exists(tier3_corrected):
+        print('Tier 3 corrected results already exist, skipping Tier 3 baseline run')
+        with open(tier3_corrected) as f:
+            existing_tier3 = list(csv.DictReader(f))
+        print_summary('TIER 3 CORRECTED RESULTS (5 epochs)', existing_tier3, baseline_key='A1_baseline_5ep')
+    else:
+        print('\n' + '#' * 75)
+        print('#  TIER 3 SUPPLEMENT: Baseline at 5 epochs')
+        print('#' * 75)
+        os.makedirs(tier3_dir, exist_ok=True)
+        baseline_5ep = run_experiment(*TIER3_BASELINE)
+        tier3_results.append(baseline_5ep)
+        save_results(tier3_results, tier3_file)
 
-    git_push('exp/tier3: corrected last-epoch values + baseline@5ep comparison')
+        # Read existing tier3 results and add baseline
+        csv_path = os.path.join(tier3_dir, 'tier3_results.csv')
+        if os.path.exists(csv_path):
+            with open(csv_path) as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    name = row['experiment']
+                    log_files = list(glob.glob(os.path.join(tier3_dir, '%s_2026*/log.txt' % name)))
+                    if log_files:
+                        with open(log_files[0]) as lf:
+                            log_text = lf.read()
+                        p1_last, p1_best, p2_last, p2_best, loss = extract_mpjpe_last_epoch(log_text)
+                        row['mpjpe_p1_last'] = p1_last
+                        row['mpjpe_p1_best'] = p1_best
+                        row['p_mpjpe_last'] = p2_last
+                        row['p_mpjpe_best'] = p2_best
+                        row['loss_3d'] = loss
+                        row['epochs'] = 5
+                    existing_tier3.append(row)
 
-    # ─── Tier 4: Top 3 winners + baseline at 24 epochs ───
+        all_tier3 = existing_tier3 + tier3_results
+        save_results(all_tier3, tier3_corrected)
+        git_push('exp/tier3: corrected last-epoch values + baseline@5ep comparison')
+
+    # ─── Tier 4: Top 2 winners + baseline at 24 epochs (wandb online) ───
     print('\n\n' + '#' * 75)
-    print('#  TIER 4: Full training (24 epochs) — Top 3 + Baseline')
+    print('#  TIER 4: Full training (24 epochs) — Top 2 + Baseline')
     print('#' * 75)
     tier4_dir = os.path.join(RESULTS_DIR, 'tier4')
     os.makedirs(tier4_dir, exist_ok=True)
