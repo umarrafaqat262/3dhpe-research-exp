@@ -32,7 +32,7 @@ TRAIN_SCRIPT = os.path.join(BASE, '..', 'train.py')
 CONFIG_DIR = os.path.join(BASE, '..', 'configs', 'experiments')
 
 # ─── Tier 3: Baseline at 5 epochs (for fair comparison) ───
-TIER3_BASELINE = ('A1_baseline_5ep', 'exp_A1_baseline.yaml', 1470211, 5)
+TIER3_BASELINE = ('A1_baseline_5ep', 'exp_A1_baseline.yaml', 1470211, 5, False)
 
 # ─── Tier 4: Top 2 winners from Tier 3 + baseline at 24 epochs ───
 TIER4_EXPERIMENTS = [
@@ -73,7 +73,7 @@ def extract_mpjpe_last_epoch(text):
     return p1_last, p1_best, p2_last, p2_best, loss
 
 
-def run_experiment(name, config_file, expected_params, num_epochs):
+def run_experiment(name, config_file, expected_params, num_epochs, use_wandb=True):
     config_path = os.path.join(CONFIG_DIR, config_file)
     tier_dir = 'tier3' if num_epochs <= 5 else 'tier4'
     output_dir = os.path.join(RESULTS_DIR, tier_dir, name)
@@ -98,7 +98,8 @@ def run_experiment(name, config_file, expected_params, num_epochs):
         yaml.dump(cfg, f, default_flow_style=False)
 
     train_out = os.path.join(output_dir, 'train_log.txt')
-    cmd = [PYTHON, TRAIN_SCRIPT, '--config', tmp_config, '-c', output_dir, '--wandb', 'False']
+    wandb_flag = 'True' if use_wandb else 'False'
+    cmd = [PYTHON, TRAIN_SCRIPT, '--config', tmp_config, '-c', output_dir, '--wandb', wandb_flag]
 
     print('  Started: %s' % datetime.now().strftime('%Y-%m-%d %H:%M'))
     start = time.time()
@@ -215,7 +216,7 @@ def main():
             for row in reader:
                 # Fix: extract correct last-epoch values from logs
                 name = row['experiment']
-                    log_files = list(glob.glob(os.path.join(tier3_dir, '%s_2026*/log.txt' % name)))
+                log_files = list(glob.glob(os.path.join(tier3_dir, '%s_2026*/log.txt' % name)))
                 if log_files:
                     with open(log_files[0]) as lf:
                         log_text = lf.read()

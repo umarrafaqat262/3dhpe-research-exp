@@ -1,26 +1,3 @@
-Pipeline started: 2026-06-29 00:13
-Tier 3 results already collected (from earlier tier3.py run)
-
-
-###########################################################################
-#  TIER 3 SUPPLEMENT: Baseline at 5 epochs
-###########################################################################
-
-======================================================================
-  TIER3: A1_baseline_5ep (5 epochs)
-  Config: exp_A1_baseline.yaml
-  Output: /home/ubuntu/experiments/kinecmamba/experiments/results/tier3/A1_baseline_5ep
-======================================================================
-  Started: 2026-06-29 00:13
-  Finished: 01:54 (101.2 min)
-  MPJPE last epoch: 111.36
-  MPJPE best epoch: 111.36
-  P-MPJPE last:     79.11
-  P-MPJPE best:     79.11
-  [saved] /home/ubuntu/experiments/kinecmamba/experiments/results/tier3/tier3_results_corrected.csv
-Traceback (most recent call last):
-  File "/home/ubuntu/experiments/kinecmamba/experiments/pipeline.py", line 261, in <module>
-    main()
-  File "/home/ubuntu/experiments/kinecmamba/experiments/pipeline.py", line 218, in main
-    log_files = list(os.path.glob(os.path.join(tier3_dir, '%s_2026*/log.txt' % name)))
-AttributeError: module 'posixpath' has no attribute 'glob'
+  File "/home/ubuntu/experiments/kinecmamba/experiments/pipeline.py", line 218
+    log_files = list(glob.glob(os.path.join(tier3_dir, '%s_2026*/log.txt' % name)))
+IndentationError: unexpected indent
