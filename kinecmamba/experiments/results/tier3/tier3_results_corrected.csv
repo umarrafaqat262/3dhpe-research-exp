@@ -1,0 +1,2 @@
+experiment,timestamp,config,params,epochs,train_time,mpjpe_p1_last,mpjpe_p1_best,p_mpjpe_last,p_mpjpe_best,loss_3d,delta_vs_baseline
+A1_baseline_5ep,2026-06-29T01:54:14.065166,exp_A1_baseline.yaml,1470211,5,6071.6,111.36365515400793,111.36365515400793,79.11012212376721,79.11012212376721,0.060188,

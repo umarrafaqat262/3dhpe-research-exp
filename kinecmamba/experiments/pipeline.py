@@ -15,6 +15,7 @@ import sys
 import csv
 import time
 import re
+import glob
 import subprocess
 import yaml
 import json
@@ -33,11 +34,10 @@ CONFIG_DIR = os.path.join(BASE, '..', 'configs', 'experiments')
 # ─── Tier 3: Baseline at 5 epochs (for fair comparison) ───
 TIER3_BASELINE = ('A1_baseline_5ep', 'exp_A1_baseline.yaml', 1470211, 5)
 
-# ─── Tier 4: Top 3 from Tier 3 + baseline at 24 epochs ───
+# ─── Tier 4: Top 2 winners from Tier 3 + baseline at 24 epochs ───
 TIER4_EXPERIMENTS = [
     ('B1_hypergcn',   'exp_B1_hypergcn.yaml',   1478473, 24),
     ('C1_ssi_msm',    'exp_C1_ssi_msm.yaml',    1483300, 24),
-    ('A3_ssi',        'exp_A3_ssi.yaml',        1474596, 24),
     ('A1_baseline',   'exp_A1_baseline.yaml',   1470211, 24),
 ]
 
@@ -215,7 +215,7 @@ def main():
             for row in reader:
                 # Fix: extract correct last-epoch values from logs
                 name = row['experiment']
-                log_files = list(os.path.glob(os.path.join(tier3_dir, '%s_2026*/log.txt' % name)))
+                    log_files = list(glob.glob(os.path.join(tier3_dir, '%s_2026*/log.txt' % name)))
                 if log_files:
                     with open(log_files[0]) as lf:
                         log_text = lf.read()
