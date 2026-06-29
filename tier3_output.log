@@ -1,0 +1,57 @@
+
+======================================================================
+  TIER 3: B2_gat_head (5 epochs)
+  Config: exp_B2_gat_head.yaml
+  Output: /home/ubuntu/experiments/kinecmamba/experiments/results/tier3/B2_gat_head
+======================================================================
+  Training started at 12:04...
+  Finished at 13:46 (101.8 min)
+  MPJPE (P1): 183.01
+  P-MPJPE (P2): 122.51
+  Δ vs baseline @1ep: -22.1mm
+
+======================================================================
+  TIER 3: A3_ssi (5 epochs)
+  Config: exp_A3_ssi.yaml
+  Output: /home/ubuntu/experiments/kinecmamba/experiments/results/tier3/A3_ssi
+======================================================================
+  Training started at 13:46...
+  Finished at 15:27 (101.5 min)
+  MPJPE (P1): 186.88
+  P-MPJPE (P2): 129.29
+  Δ vs baseline @1ep: -18.2mm
+
+======================================================================
+  TIER 3: C1_ssi_msm (5 epochs)
+  Config: exp_C1_ssi_msm.yaml
+  Output: /home/ubuntu/experiments/kinecmamba/experiments/results/tier3/C1_ssi_msm
+======================================================================
+  Training started at 15:27...
+  Finished at 17:10 (102.9 min)
+  MPJPE (P1): 202.58
+  P-MPJPE (P2): 130.58
+  Δ vs baseline @1ep: -2.5mm
+
+======================================================================
+  TIER 3: B1_hypergcn (5 epochs)
+  Config: exp_B1_hypergcn.yaml
+  Output: /home/ubuntu/experiments/kinecmamba/experiments/results/tier3/B1_hypergcn
+======================================================================
+  Training started at 17:10...
+  Finished at 18:52 (101.6 min)
+  MPJPE (P1): 195.98
+  P-MPJPE (P2): 148.76
+  Δ vs baseline @1ep: -9.1mm
+
+
+======================================================================
+  TIER 3 RESULTS (5 epochs)
+======================================================================
+Experiment              MPJPE    P-MPJPE     Time
+------------------ ---------- ---------- --------
+B2_gat_head            183.01     122.51     102m
+A3_ssi                 186.88     129.29     101m
+C1_ssi_msm             202.58     130.58     103m
+B1_hypergcn            195.98     148.76     102m
+======================================================================
+Results saved to: /home/ubuntu/experiments/kinecmamba/experiments/results/tier3/tier3_results.csv
