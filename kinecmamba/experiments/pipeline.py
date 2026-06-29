@@ -19,6 +19,7 @@ import glob
 import subprocess
 import yaml
 import json
+import torch
 from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -84,6 +85,15 @@ def run_experiment(name, config_file, expected_params, num_epochs, use_wandb=Tru
     print('  Config: %s' % config_file)
     print('  Output: %s' % output_dir)
     print('%s' % ('=' * 70))
+
+    # Check for existing checkpoint to resume
+    latest_bin = os.path.join(output_dir, 'latest_epoch.bin')
+    if os.path.exists(latest_bin):
+        checkpoint = torch.load(latest_bin, map_location='cpu')
+        resume_epoch = checkpoint.get('epoch', 0)
+        print('  RESUMING from checkpoint epoch %d → %d epochs total' % (resume_epoch, num_epochs))
+    else:
+        print('  Starting from scratch: %d epochs' % num_epochs)
 
     # Create temp config
     with open(config_path, 'r') as f:
@@ -263,21 +273,41 @@ def main():
         save_results(all_tier3, tier3_corrected)
         git_push('exp/tier3: corrected last-epoch values + baseline@5ep comparison')
 
-    # ─── Tier 4: Top 2 winners + baseline at 24 epochs (wandb online) ───
+    # ─── Tier 4: Top 2 winners + baseline at 30 epochs (wandb online) ───
     print('\n\n' + '#' * 75)
-    print('#  TIER 4: Full training (24 epochs) — Top 2 + Baseline')
+    print('#  TIER 4: Full training (30 epochs) — Top 2 + Baseline')
     print('#' * 75)
     tier4_dir = os.path.join(RESULTS_DIR, 'tier4')
     os.makedirs(tier4_dir, exist_ok=True)
     tier4_results = []
 
     for exp in TIER4_EXPERIMENTS:
+        name, config, params, num_epochs = exp
+        # Check if already completed target epochs
+        exp_dir = os.path.join(tier4_dir, name)
+        latest_bin = os.path.join(exp_dir, 'latest_epoch.bin')
+        if os.path.exists(latest_bin):
+            ckpt = torch.load(latest_bin, map_location='cpu')
+            ckpt_epoch = ckpt.get('epoch', 0)
+            if ckpt_epoch >= num_epochs:
+                print('\n  SKIP %s: already at epoch %d (target=%d)' % (name, ckpt_epoch, num_epochs))
+                # Still collect results from existing log
+                log_files = list(glob.glob(os.path.join(tier4_dir, '%s_2026*/log.txt' % name)))
+                if log_files:
+                    with open(log_files[0]) as lf:
+                        p1l, p1b, p2l, p2b, loss = extract_mpjpe_last_epoch(lf.read())
+                    tier4_results.append({
+                        'experiment': name, 'config': config, 'params': params,
+                        'epochs': ckpt_epoch, 'mpjpe_p1_last': p1l, 'mpjpe_p1_best': p1b,
+                        'p_mpjpe_last': p2l, 'p_mpjpe_best': p2b, 'loss_3d': loss,
+                    })
+                continue
         result = run_experiment(*exp)
         tier4_results.append(result)
         save_results(tier4_results, os.path.join(tier4_dir, 'tier4_results.csv'))
-        git_push('exp/tier4: %s complete (%d epochs)' % (exp[0], exp[3]))
+        git_push('exp/tier4: %s complete (%d epochs)' % (name, num_epochs))
 
-    print_summary('TIER 4 FINAL RESULTS (24 epochs)', tier4_results, baseline_key='A1_baseline')
+    print_summary('TIER 4 FINAL RESULTS (30 epochs)', tier4_results, baseline_key='A1_baseline')
     save_results(tier4_results, os.path.join(tier4_dir, 'tier4_results.csv'))
     git_push('exp/tier4: all experiments complete')
 
