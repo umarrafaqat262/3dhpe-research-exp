@@ -1,3 +1,19 @@
-  File "/home/ubuntu/experiments/kinecmamba/experiments/pipeline.py", line 218
-    log_files = list(glob.glob(os.path.join(tier3_dir, '%s_2026*/log.txt' % name)))
-IndentationError: unexpected indent
+Pipeline started: 2026-06-29 02:05
+Tier 3 results already collected (from earlier tier3.py run)
+
+Tier 3 corrected results already exist, skipping Tier 3 baseline run
+
+
+===========================================================================
+  TIER 3 CORRECTED RESULTS (5 epochs)
+===========================================================================
+Experiment         MPJPE_last MPJPE_best    P-MPJPE  Δ vs base
+------------------ ---------- ---------- ---------- ----------
+Traceback (most recent call last):
+  File "/home/ubuntu/experiments/kinecmamba/experiments/pipeline.py", line 267, in <module>
+    main()
+  File "/home/ubuntu/experiments/kinecmamba/experiments/pipeline.py", line 209, in main
+    print_summary('TIER 3 CORRECTED RESULTS (5 epochs)', existing_tier3, baseline_key='A1_baseline_5ep')
+  File "/home/ubuntu/experiments/kinecmamba/experiments/pipeline.py", line 179, in print_summary
+    p1l = '%.1f' % r['mpjpe_p1_last'] if r.get('mpjpe_p1_last') else 'N/A'
+TypeError: must be real number, not str

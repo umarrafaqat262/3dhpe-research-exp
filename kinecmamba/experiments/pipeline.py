@@ -172,19 +172,42 @@ def print_summary(title, results, baseline_key=None):
     print(h.format('-' * 18, '-' * 10, '-' * 10, '-' * 10, '-' * 10))
     baseline_best = None
     for r in results:
-        if baseline_key and r['experiment'] == baseline_key:
-            baseline_best = r.get('mpjpe_p1_best')
+        if baseline_key and r.get('experiment') == baseline_key:
+            try:
+                baseline_best = float(r.get('mpjpe_p1_best', 0) or 0)
+            except (ValueError, TypeError):
+                pass
             break
     for r in results:
-        p1l = '%.1f' % r['mpjpe_p1_last'] if r.get('mpjpe_p1_last') else 'N/A'
-        p1b = '%.1f' % r['mpjpe_p1_best'] if r.get('mpjpe_p1_best') else 'N/A'
-        p2 = '%.1f' % r.get('p_mpjpe_best') if r.get('p_mpjpe_best') else 'N/A'
-        if baseline_best and r.get('mpjpe_p1_best'):
-            delta = r['mpjpe_p1_best'] - baseline_best
-            d = '%+.1f' % delta
+        p1l_raw = r.get('mpjpe_p1_last')
+        p1b_raw = r.get('mpjpe_p1_best')
+        p2_raw = r.get('p_mpjpe_best')
+        try:
+            p1l = '%.1f' % float(p1l_raw) if p1l_raw else 'N/A'
+        except (ValueError, TypeError):
+            p1l = 'N/A'
+        try:
+            p1b = '%.1f' % float(p1b_raw) if p1b_raw else 'N/A'
+        except (ValueError, TypeError):
+            p1b = 'N/A'
+        try:
+            p2 = '%.1f' % float(p2_raw) if p2_raw else 'N/A'
+        except (ValueError, TypeError):
+            p2 = 'N/A'
+        if baseline_key and r.get('experiment') == baseline_key:
+            try:
+                baseline_best = float(p1b_raw)
+            except (ValueError, TypeError):
+                baseline_best = None
+        try:
+            cur_best = float(p1b_raw) if p1b_raw else None
+        except (ValueError, TypeError):
+            cur_best = None
+        if baseline_best and cur_best:
+            d = '%+.1f' % (cur_best - baseline_best)
         else:
             d = '---'
-        print(h.format(r['experiment'], p1l, p1b, p2, d))
+        print(h.format(r.get('experiment', '?'), p1l, p1b, p2, d))
     print('%s' % ('=' * 75))
 
 
