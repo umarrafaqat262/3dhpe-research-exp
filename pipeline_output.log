@@ -23,3 +23,11 @@ A1_baseline_5ep         111.4      111.4       79.1       +0.0
   Output: /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/B1_hypergcn
 ======================================================================
   Started: 2026-06-29 02:06
+  Finished: 10:12 (486.7 min)
+  MPJPE last epoch: 54.83
+  MPJPE best epoch: 54.73
+  P-MPJPE last:     44.89
+  P-MPJPE best:     44.89
+  [saved] /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/tier4_results.csv
+
+--- Git push: exp/tier4: B1_hypergcn complete (24 epochs) ---
