@@ -54,3 +54,20 @@ A1_baseline_5ep         111.4      111.4       79.1       +0.0
   [saved] /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/tier4_results.csv
 
 --- Git push: exp/tier4: C1_ssi_msm complete (30 epochs) ---
+  commit: [exp/comparison 834a2b8c] exp/tier4: C1_ssi_msm complete (30 epochs)
+ 7 files changed, 125176 insert
+  push: OK
+
+
+===========================================================================
+  TIER 4 FINAL RESULTS (30 epochs)
+===========================================================================
+Experiment         MPJPE_last MPJPE_best    P-MPJPE  Δ vs base
+------------------ ---------- ---------- ---------- ----------
+A1_baseline              54.7       54.5       44.1       +0.0
+B1_hypergcn              54.4       54.4       44.6       -0.1
+C1_ssi_msm               54.0       54.0       44.3       -0.6
+===========================================================================
+  [saved] /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/tier4_results.csv
+
+--- Git push: exp/tier4: all experiments complete ---
