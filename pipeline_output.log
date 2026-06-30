@@ -33,3 +33,24 @@ A1_baseline_5ep         111.4      111.4       79.1       +0.0
   [saved] /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/tier4_results.csv
 
 --- Git push: exp/tier4: A1_baseline complete (30 epochs) ---
+  commit: [exp/comparison bf93930a] exp/tier4: A1_baseline complete (30 epochs)
+ 6 files changed, 104250 inser
+  push: OK
+
+  SKIP B1_hypergcn: already at epoch 30 (target=30)
+
+======================================================================
+  TIER4: C1_ssi_msm (30 epochs)
+  Config: exp_C1_ssi_msm.yaml
+  Output: /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/C1_ssi_msm
+======================================================================
+  Starting from scratch: 30 epochs
+  Started: 2026-06-29 21:41
+  Finished: 07:57 (616.2 min)
+  MPJPE last epoch: 53.99
+  MPJPE best epoch: 53.99
+  P-MPJPE last:     44.35
+  P-MPJPE best:     44.35
+  [saved] /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/tier4_results.csv
+
+--- Git push: exp/tier4: C1_ssi_msm complete (30 epochs) ---

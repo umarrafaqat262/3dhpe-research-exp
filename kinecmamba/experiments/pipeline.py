@@ -42,6 +42,13 @@ TIER4_EXPERIMENTS = [
     ('C1_ssi_msm',    'exp_C1_ssi_msm.yaml',    1483300, 30),
 ]
 
+# ─── Tier 5: Resume from Tier 4 checkpoints → 120 epochs (paper recipe) ───
+TIER5_EXPERIMENTS = [
+    ('A1_baseline',   'exp_A1_baseline.yaml',   1470211, 120),
+    ('B1_hypergcn',   'exp_B1_hypergcn.yaml',   1478473, 120),
+    ('C1_ssi_msm',    'exp_C1_ssi_msm.yaml',    1483300, 120),
+]
+
 CSV_FIELDS = ['experiment', 'timestamp', 'config', 'params', 'epochs',
               'train_time', 'mpjpe_p1_last', 'mpjpe_p1_best',
               'p_mpjpe_last', 'p_mpjpe_best', 'loss_3d', 'delta_vs_baseline']
@@ -135,6 +142,81 @@ def run_experiment(name, config_file, expected_params, num_epochs, use_wandb=Tru
     # even though train.py appends a timestamp to -c path
     if existing_ckpt:
         cmd.extend(['-r', existing_ckpt])
+
+    print('  Started: %s' % datetime.now().strftime('%Y-%m-%d %H:%M'))
+    start = time.time()
+    stdout, stderr, rc = run_capture(cmd, timeout=max(14400, num_epochs * 1500))
+    elapsed = time.time() - start
+    combined = stdout + '\n' + stderr
+    with open(train_out, 'w') as f:
+        f.write(combined)
+
+    p1_last, p1_best, p2_last, p2_best, loss = extract_mpjpe_last_epoch(combined)
+    finished = datetime.now().strftime('%H:%M')
+
+    results = {
+        'experiment': name,
+        'timestamp': datetime.now().isoformat(),
+        'config': config_file,
+        'params': expected_params,
+        'epochs': num_epochs,
+        'train_time': round(elapsed, 1),
+        'mpjpe_p1_last': p1_last,
+        'mpjpe_p1_best': p1_best,
+        'p_mpjpe_last': p2_last,
+        'p_mpjpe_best': p2_best,
+        'loss_3d': loss,
+    }
+
+    print('  Finished: %s (%.1f min)' % (finished, elapsed / 60))
+    if rc != 0:
+        print('  RC=%d (non-fatal, MPJPE captured from log)' % rc)
+    print('  MPJPE last epoch: %s' % ('%.2f' % p1_last if p1_last else 'N/A'))
+    print('  MPJPE best epoch: %s' % ('%.2f' % p1_best if p1_best else 'N/A'))
+    print('  P-MPJPE last:     %s' % ('%.2f' % p2_last if p2_last else 'N/A'))
+    print('  P-MPJPE best:     %s' % ('%.2f' % p2_best if p2_best else 'N/A'))
+
+    return results
+
+
+def run_tier5_experiment(name, config_file, expected_params, num_epochs):
+    """Resume from Tier 4 checkpoint and train to 120 epochs."""
+    config_path = os.path.join(CONFIG_DIR, config_file)
+    tier5_dir = os.path.join(RESULTS_DIR, 'tier5')
+    output_dir = os.path.join(tier5_dir, name)
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Find Tier 4 checkpoint
+    tier4_dir = os.path.join(RESULTS_DIR, 'tier4')
+    existing_ckpt = find_latest_checkpoint(tier4_dir, name)
+
+    if not existing_ckpt:
+        print('  ERROR: No Tier 4 checkpoint found for %s' % name)
+        return None
+
+    resume_epoch = load_checkpoint_epoch(existing_ckpt)
+    print('\n%s' % ('=' * 70))
+    print('  TIER 5: %s (%d epochs, resume from epoch %d)' % (name, num_epochs, resume_epoch))
+    print('  Config: %s' % config_file)
+    print('  Tier 4 checkpoint: %s' % existing_ckpt)
+    print('  Output: %s' % output_dir)
+    print('%s' % ('=' * 70))
+
+    # Create temp config with epochs=120
+    with open(config_path, 'r') as f:
+        cfg = yaml.safe_load(f)
+    cfg['epochs'] = num_epochs
+    cfg['no_eval'] = False
+    if 'checkpoint' in cfg:
+        cfg['checkpoint'] = output_dir
+
+    tmp_config = os.path.join(output_dir, '_run_config.yaml')
+    with open(tmp_config, 'w') as f:
+        yaml.dump(cfg, f, default_flow_style=False)
+
+    train_out = os.path.join(output_dir, 'train_log.txt')
+    cmd = [PYTHON, TRAIN_SCRIPT, '--config', tmp_config, '-c', output_dir,
+           '--wandb', 'True', '-r', existing_ckpt]
 
     print('  Started: %s' % datetime.now().strftime('%Y-%m-%d %H:%M'))
     start = time.time()
@@ -333,6 +415,42 @@ def main():
     print_summary('TIER 4 FINAL RESULTS (30 epochs)', tier4_results, baseline_key='A1_baseline')
     save_results(tier4_results, os.path.join(tier4_dir, 'tier4_results.csv'))
     git_push('exp/tier4: all experiments complete')
+
+    # ─── Tier 5: Resume from Tier 4 → 120 epochs (wandb online) ───
+    print('\n\n' + '#' * 75)
+    print('#  TIER 5: Extended training (30→120 epochs) — A1, B1, C1')
+    print('#' * 75)
+    tier5_dir = os.path.join(RESULTS_DIR, 'tier5')
+    os.makedirs(tier5_dir, exist_ok=True)
+    tier5_results = []
+
+    for exp in TIER5_EXPERIMENTS:
+        name, config, params, num_epochs = exp
+        # Check if already completed target epochs
+        existing_ckpt = find_latest_checkpoint(tier5_dir, name)
+        if existing_ckpt:
+            ckpt_epoch = load_checkpoint_epoch(existing_ckpt)
+            if ckpt_epoch >= num_epochs:
+                print('\n  SKIP %s: already at epoch %d (target=%d)' % (name, ckpt_epoch, num_epochs))
+                log_files = list(glob.glob(os.path.join(tier5_dir, '%s_2026*/log.txt' % name)))
+                if log_files:
+                    with open(log_files[0]) as lf:
+                        p1l, p1b, p2l, p2b, loss = extract_mpjpe_last_epoch(lf.read())
+                    tier5_results.append({
+                        'experiment': name, 'config': config, 'params': params,
+                        'epochs': ckpt_epoch, 'mpjpe_p1_last': p1l, 'mpjpe_p1_best': p1b,
+                        'p_mpjpe_last': p2l, 'p_mpjpe_best': p2b, 'loss_3d': loss,
+                    })
+                continue
+        result = run_tier5_experiment(name, config, params, num_epochs)
+        if result:
+            tier5_results.append(result)
+            save_results(tier5_results, os.path.join(tier5_dir, 'tier5_results.csv'))
+            git_push('exp/tier5: %s complete (%d epochs)' % (name, num_epochs))
+
+    print_summary('TIER 5 FINAL RESULTS (120 epochs)', tier5_results, baseline_key='A1_baseline')
+    save_results(tier5_results, os.path.join(tier5_dir, 'tier5_results.csv'))
+    git_push('exp/tier5: all experiments complete')
 
     print('\n\n' + '=' * 75)
     print('  PIPELINE COMPLETE: %s' % datetime.now().strftime('%Y-%m-%d %H:%M'))
