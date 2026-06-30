@@ -1,4 +1,4 @@
-Pipeline started: 2026-06-29 13:16
+Pipeline started: 2026-06-30 09:13
 Tier 3 results already collected (from earlier tier3.py run)
 
 Tier 3 corrected results already exist, skipping Tier 3 baseline run
@@ -17,46 +17,11 @@ A1_baseline_5ep         111.4      111.4       79.1       +0.0
 #  TIER 4: Full training (30 epochs) — Top 2 + Baseline
 ###########################################################################
 
-======================================================================
-  TIER4: A1_baseline (30 epochs)
-  Config: exp_A1_baseline.yaml
-  Output: /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/A1_baseline
-======================================================================
-  FOUND checkpoint epoch 5 at: /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/A1_baseline/latest_epoch.bin
-  Will resume → 30 epochs total
-  Started: 2026-06-29 13:16
-  Finished: 21:41 (505.3 min)
-  MPJPE last epoch: 54.72
-  MPJPE best epoch: 54.55
-  P-MPJPE last:     44.10
-  P-MPJPE best:     44.10
-  [saved] /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/tier4_results.csv
-
---- Git push: exp/tier4: A1_baseline complete (30 epochs) ---
-  commit: [exp/comparison bf93930a] exp/tier4: A1_baseline complete (30 epochs)
- 6 files changed, 104250 inser
-  push: OK
+  SKIP A1_baseline: already at epoch 30 (target=30)
 
   SKIP B1_hypergcn: already at epoch 30 (target=30)
 
-======================================================================
-  TIER4: C1_ssi_msm (30 epochs)
-  Config: exp_C1_ssi_msm.yaml
-  Output: /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/C1_ssi_msm
-======================================================================
-  Starting from scratch: 30 epochs
-  Started: 2026-06-29 21:41
-  Finished: 07:57 (616.2 min)
-  MPJPE last epoch: 53.99
-  MPJPE best epoch: 53.99
-  P-MPJPE last:     44.35
-  P-MPJPE best:     44.35
-  [saved] /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/tier4_results.csv
-
---- Git push: exp/tier4: C1_ssi_msm complete (30 epochs) ---
-  commit: [exp/comparison 834a2b8c] exp/tier4: C1_ssi_msm complete (30 epochs)
- 7 files changed, 125176 insert
-  push: OK
+  SKIP C1_ssi_msm: already at epoch 30 (target=30)
 
 
 ===========================================================================
