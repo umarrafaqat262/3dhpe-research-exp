@@ -42,9 +42,8 @@ TIER4_EXPERIMENTS = [
     ('C1_ssi_msm',    'exp_C1_ssi_msm.yaml',    1483300, 30),
 ]
 
-# ─── Tier 5: Resume from Tier 4 checkpoints → 120 epochs (paper recipe) ───
+# ─── Tier 5: Resume from Tier 4 checkpoints → 120 epochs (paper's exponential LR) ───
 TIER5_EXPERIMENTS = [
-    ('A1_baseline',   'exp_A1_baseline.yaml',   1470211, 120),
     ('B1_hypergcn',   'exp_B1_hypergcn.yaml',   1478473, 120),
     ('C1_ssi_msm',    'exp_C1_ssi_msm.yaml',    1483300, 120),
 ]
@@ -202,11 +201,13 @@ def run_tier5_experiment(name, config_file, expected_params, num_epochs):
     print('  Output: %s' % output_dir)
     print('%s' % ('=' * 70))
 
-    # Create temp config with epochs=120
+    # Create temp config with paper's recipe: exponential LR, no warmup
     with open(config_path, 'r') as f:
         cfg = yaml.safe_load(f)
     cfg['epochs'] = num_epochs
     cfg['no_eval'] = False
+    cfg['lr_scheduler'] = 'exponential'  # Paper's recipe
+    cfg['warmup_epochs'] = 0             # Paper has no warmup
     if 'checkpoint' in cfg:
         cfg['checkpoint'] = output_dir
 
