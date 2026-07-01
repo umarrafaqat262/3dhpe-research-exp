@@ -182,25 +182,33 @@ def run_experiment(name, config_file, expected_params, num_epochs, use_wandb=Tru
 
 
 def run_tier5_experiment(name, config_file, expected_params, num_epochs):
-    """Resume from Tier 4 checkpoint and train to 120 epochs."""
+    """Resume from latest checkpoint (Tier 5 if exists, else Tier 4) and train to num_epochs."""
     config_path = os.path.join(CONFIG_DIR, config_file)
     tier5_dir = os.path.join(RESULTS_DIR, 'tier5')
     output_dir = os.path.join(tier5_dir, name)
     os.makedirs(output_dir, exist_ok=True)
 
-    # Find Tier 4 checkpoint
-    tier4_dir = os.path.join(RESULTS_DIR, 'tier4')
-    existing_ckpt = find_latest_checkpoint(tier4_dir, name)
+    # First try to resume from existing Tier 5 checkpoint (higher epoch)
+    existing_ckpt = find_latest_checkpoint(tier5_dir, name)
+    source = 'Tier 5'
 
-    if not existing_ckpt:
-        print('  ERROR: No Tier 4 checkpoint found for %s' % name)
-        return None
+    if existing_ckpt:
+        resume_epoch = load_checkpoint_epoch(existing_ckpt)
+    else:
+        # Fall back to Tier 4 checkpoint
+        tier4_dir = os.path.join(RESULTS_DIR, 'tier4')
+        existing_ckpt = find_latest_checkpoint(tier4_dir, name)
+        source = 'Tier 4'
+        if existing_ckpt:
+            resume_epoch = load_checkpoint_epoch(existing_ckpt)
+        else:
+            print('  ERROR: No checkpoint found for %s' % name)
+            return None
 
-    resume_epoch = load_checkpoint_epoch(existing_ckpt)
     print('\n%s' % ('=' * 70))
-    print('  TIER 5: %s (%d epochs, resume from epoch %d)' % (name, num_epochs, resume_epoch))
+    print('  TIER 5: %s (%d epochs, resume from %s epoch %d)' % (name, num_epochs, source, resume_epoch))
     print('  Config: %s' % config_file)
-    print('  Tier 4 checkpoint: %s' % existing_ckpt)
+    print('  Checkpoint: %s' % existing_ckpt)
     print('  Output: %s' % output_dir)
     print('%s' % ('=' * 70))
 
