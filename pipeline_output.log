@@ -144,3 +144,27 @@ C1_ssi_msm               54.0       54.0       44.3       -0.6
   [saved] /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/tier4_results.csv
 
 --- Git push: exp/tier4: all experiments complete ---
+  commit: [exp/comparison e26833b4] exp/tier4: all experiments complete
+ 2 files changed, 72 insertions(+), 10
+  push: OK
+
+
+###########################################################################
+#  TIER 5: Extended training (30→120 epochs) — A1, B1, C1
+###########################################################################
+
+======================================================================
+  TIER 5: B1_hypergcn (120 epochs, resume from Tier 5 epoch 111)
+  Config: exp_B1_hypergcn.yaml
+  Checkpoint: /home/ubuntu/experiments/kinecmamba/experiments/results/tier5/B1_hypergcn_2026_06_30_T_22_48_35/latest_epoch.bin
+  Output: /home/ubuntu/experiments/kinecmamba/experiments/results/tier5/B1_hypergcn
+======================================================================
+  Started: 2026-07-01 18:33
+  Finished: 21:36 (182.9 min)
+  MPJPE last epoch: 47.72
+  MPJPE best epoch: 46.45
+  P-MPJPE last:     38.81
+  P-MPJPE best:     38.39
+  [saved] /home/ubuntu/experiments/kinecmamba/experiments/results/tier5/tier5_results.csv
+
+--- Git push: exp/tier5: B1_hypergcn complete (120 epochs) ---
