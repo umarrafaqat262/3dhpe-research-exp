@@ -36,3 +36,57 @@ C1_ssi_msm               54.0       54.0       44.3       -0.6
   [saved] /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/tier4_results.csv
 
 --- Git push: exp/tier4: all experiments complete ---
+  commit: [exp/comparison 476b8d1e] exp/tier4: all experiments complete
+ 3 files changed, 52 insertions(+), 4 
+  push: OK
+
+
+###########################################################################
+#  TIER 5: Extended training (30→120 epochs) — A1, B1, C1
+###########################################################################
+
+======================================================================
+  TIER 5: B1_hypergcn (120 epochs, resume from epoch 30)
+  Config: exp_B1_hypergcn.yaml
+  Tier 4 checkpoint: /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/B1_hypergcn_2026_06_29_T_18_21_29/latest_epoch.bin
+  Output: /home/ubuntu/experiments/kinecmamba/experiments/results/tier5/B1_hypergcn
+======================================================================
+  Started: 2026-06-30 14:48
+Pipeline started: 2026-07-01 18:30
+Tier 3 results already collected (from earlier tier3.py run)
+
+Tier 3 corrected results already exist, skipping Tier 3 baseline run
+
+
+===========================================================================
+  TIER 3 CORRECTED RESULTS (5 epochs)
+===========================================================================
+Experiment         MPJPE_last MPJPE_best    P-MPJPE  Δ vs base
+------------------ ---------- ---------- ---------- ----------
+A1_baseline_5ep         111.4      111.4       79.1       +0.0
+===========================================================================
+
+
+###########################################################################
+#  TIER 4: Full training (30 epochs) — Top 2 + Baseline
+###########################################################################
+
+  SKIP A1_baseline: already at epoch 30 (target=30)
+
+  SKIP B1_hypergcn: already at epoch 30 (target=30)
+
+  SKIP C1_ssi_msm: already at epoch 30 (target=30)
+
+
+===========================================================================
+  TIER 4 FINAL RESULTS (30 epochs)
+===========================================================================
+Experiment         MPJPE_last MPJPE_best    P-MPJPE  Δ vs base
+------------------ ---------- ---------- ---------- ----------
+A1_baseline              54.7       54.5       44.1       +0.0
+B1_hypergcn              54.4       54.4       44.6       -0.1
+C1_ssi_msm               54.0       54.0       44.3       -0.6
+===========================================================================
+  [saved] /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/tier4_results.csv
+
+--- Git push: exp/tier4: all experiments complete ---

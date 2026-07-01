@@ -48,6 +48,9 @@ TIER5_EXPERIMENTS = [
     ('C1_ssi_msm',    'exp_C1_ssi_msm.yaml',    1483300, 120),
 ]
 
+# ─── Tier 5b: B1 extension 120→130 epochs (same exponential LR, no warmup) ───
+TIER5B_B1_EXTEND_EPOCHS = 130
+
 CSV_FIELDS = ['experiment', 'timestamp', 'config', 'params', 'epochs',
               'train_time', 'mpjpe_p1_last', 'mpjpe_p1_best',
               'p_mpjpe_last', 'p_mpjpe_best', 'loss_3d', 'delta_vs_baseline']
@@ -255,6 +258,104 @@ def run_tier5_experiment(name, config_file, expected_params, num_epochs):
     return results
 
 
+def run_tier5_extend(name, config_file, expected_params, target_epochs):
+    """Extend B1 Tier 5 run from current epoch to target_epochs (120→130).
+
+    Resumes from the latest Tier 5 checkpoint and trains to target_epochs.
+    Uses same batch, configs, and exponential LR - just continues from where left off.
+    The key: set learning_rate to the LR value at the resume epoch, so the
+    exponential decay formula (lr = lr * decay^(epoch - st)) produces correct values.
+    """
+    config_path = os.path.join(CONFIG_DIR, config_file)
+    tier5_dir = os.path.join(RESULTS_DIR, 'tier5')
+    output_dir = os.path.join(tier5_dir, name)
+
+    # Find latest Tier 5 checkpoint
+    existing_ckpt = find_latest_checkpoint(tier5_dir, name)
+    if not existing_ckpt:
+        print('  ERROR: No Tier 5 checkpoint found for %s extension' % name)
+        return None
+
+    resume_epoch = load_checkpoint_epoch(existing_ckpt)
+    if resume_epoch >= target_epochs:
+        print('  SKIP %s extension: already at epoch %d (target=%d)' % (name, resume_epoch, target_epochs))
+        return None
+
+    # Compute LR for continuation.
+    # Original run: st=30 (Tier 4 checkpoint), lr = 0.0002 * (0.99 ** (epoch - 30))
+    # At resume_epoch: lr_original = 0.0002 * (0.99 ** (resume_epoch - 30))
+    # When we resume: st = resume_epoch, so lr = new_lr * (0.99 ** (epoch - resume_epoch))
+    # At epoch = resume_epoch: lr = new_lr * 1 = new_lr
+    # Set new_lr = lr_original so the decay continues seamlessly.
+    original_lr = 0.0002
+    lr_decay = 0.99
+    tier4_resume_epoch = 30  # Tier 4 checkpoint was epoch 30
+    continuation_lr = original_lr * (lr_decay ** (resume_epoch - tier4_resume_epoch))
+
+    print('\n%s' % ('=' * 70))
+    print('  TIER 5 EXTEND: %s (%d → %d epochs)' % (name, resume_epoch, target_epochs))
+    print('  Continuation LR: %.8f (from %.8f at epoch %d)' % (continuation_lr, original_lr, resume_epoch))
+    print('  Config: %s' % config_file)
+    print('  Checkpoint: %s' % existing_ckpt)
+    print('%s' % ('=' * 70))
+
+    # Create config with continuation LR
+    with open(config_path, 'r') as f:
+        cfg = yaml.safe_load(f)
+    cfg['epochs'] = target_epochs
+    cfg['no_eval'] = False
+    cfg['lr_scheduler'] = 'exponential'  # Paper's recipe
+    cfg['warmup_epochs'] = 0
+    cfg['learning_rate'] = continuation_lr  # Key: match LR at resume point
+    if 'checkpoint' in cfg:
+        cfg['checkpoint'] = output_dir
+
+    extend_dir = os.path.join(tier5_dir, name + '_extend')
+    os.makedirs(extend_dir, exist_ok=True)
+    tmp_config = os.path.join(extend_dir, '_extend_config.yaml')
+    with open(tmp_config, 'w') as f:
+        yaml.dump(cfg, f, default_flow_style=False)
+
+    train_out = os.path.join(extend_dir, 'train_log.txt')
+    cmd = [PYTHON, TRAIN_SCRIPT, '--config', tmp_config, '-c', extend_dir,
+           '--wandb', 'True', '-r', existing_ckpt]
+
+    print('  Started: %s' % datetime.now().strftime('%Y-%m-%d %H:%M'))
+    start = time.time()
+    stdout, stderr, rc = run_capture(cmd, timeout=max(14400, target_epochs * 1500))
+    elapsed = time.time() - start
+    combined = stdout + '\n' + stderr
+    with open(train_out, 'w') as f:
+        f.write(combined)
+
+    p1_last, p1_best, p2_last, p2_best, loss = extract_mpjpe_last_epoch(combined)
+    finished = datetime.now().strftime('%H:%M')
+
+    results = {
+        'experiment': name + '_extend',
+        'timestamp': datetime.now().isoformat(),
+        'config': config_file,
+        'params': expected_params,
+        'epochs': target_epochs,
+        'train_time': round(elapsed, 1),
+        'mpjpe_p1_last': p1_last,
+        'mpjpe_p1_best': p1_best,
+        'p_mpjpe_last': p2_last,
+        'p_mpjpe_best': p2_best,
+        'loss_3d': loss,
+    }
+
+    print('  EXTEND Finished: %s (%.1f min)' % (finished, elapsed / 60))
+    if rc != 0:
+        print('  RC=%d (non-fatal, MPJPE captured from log)' % rc)
+    print('  MPJPE last epoch: %s' % ('%.2f' % p1_last if p1_last else 'N/A'))
+    print('  MPJPE best epoch: %s' % ('%.2f' % p1_best if p1_best else 'N/A'))
+    print('  P-MPJPE last:     %s' % ('%.2f' % p2_last if p2_last else 'N/A'))
+    print('  P-MPJPE best:     %s' % ('%.2f' % p2_best if p2_best else 'N/A'))
+
+    return results
+
+
 def git_push(message):
     """Stage, commit, and push to origin/exp/comparison."""
     print('\n--- Git push: %s ---' % message)
@@ -449,7 +550,16 @@ def main():
             save_results(tier5_results, os.path.join(tier5_dir, 'tier5_results.csv'))
             git_push('exp/tier5: %s complete (%d epochs)' % (name, num_epochs))
 
-    print_summary('TIER 5 FINAL RESULTS (120 epochs)', tier5_results, baseline_key='A1_baseline')
+        # ─── Tier 5b: After B1 finishes 120 epochs, extend to 130 ───
+        if name == 'B1_hypergcn':
+            print('\n--- TIER 5b: B1 extension 120 → %d epochs ---' % TIER5B_B1_EXTEND_EPOCHS)
+            ext_result = run_tier5_extend('B1_hypergcn', 'exp_B1_hypergcn.yaml', 1478473, TIER5B_B1_EXTEND_EPOCHS)
+            if ext_result:
+                tier5_results.append(ext_result)
+                save_results(tier5_results, os.path.join(tier5_dir, 'tier5_results.csv'))
+                git_push('exp/tier5b: B1 extended to %d epochs' % TIER5B_B1_EXTEND_EPOCHS)
+
+    print_summary('TIER 5 FINAL RESULTS (120+130 epochs)', tier5_results, baseline_key='A1_baseline')
     save_results(tier5_results, os.path.join(tier5_dir, 'tier5_results.csv'))
     git_push('exp/tier5: all experiments complete')
 
