@@ -168,3 +168,24 @@ C1_ssi_msm               54.0       54.0       44.3       -0.6
   [saved] /home/ubuntu/experiments/kinecmamba/experiments/results/tier5/tier5_results.csv
 
 --- Git push: exp/tier5: B1_hypergcn complete (120 epochs) ---
+  commit: [exp/comparison ee7626b8] exp/tier5: B1_hypergcn complete (120 epochs)
+ 5 files changed, 37676 inser
+  push: OK
+
+--- TIER 5b: B1 extension 120 → 130 epochs ---
+
+======================================================================
+  TIER 5 EXTEND: B1_hypergcn (120 → 130 epochs)
+  Continuation LR: 0.00008095 (from 0.00020000 at epoch 120)
+  Config: exp_B1_hypergcn.yaml
+  Checkpoint: /home/ubuntu/experiments/kinecmamba/experiments/results/tier5/B1_hypergcn_2026_07_02_T_02_33_57/latest_epoch.bin
+======================================================================
+  Started: 2026-07-01 21:36
+  EXTEND Finished: 00:59 (203.1 min)
+  MPJPE last epoch: 46.52
+  MPJPE best epoch: 46.42
+  P-MPJPE last:     38.61
+  P-MPJPE best:     38.06
+  [saved] /home/ubuntu/experiments/kinecmamba/experiments/results/tier5/tier5_results.csv
+
+--- Git push: exp/tier5b: B1 extended to 130 epochs ---
