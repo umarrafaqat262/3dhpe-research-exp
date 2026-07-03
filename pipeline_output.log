@@ -189,3 +189,22 @@ C1_ssi_msm               54.0       54.0       44.3       -0.6
   [saved] /home/ubuntu/experiments/kinecmamba/experiments/results/tier5/tier5_results.csv
 
 --- Git push: exp/tier5b: B1 extended to 130 epochs ---
+  commit: [exp/comparison 21475e1f] exp/tier5b: B1 extended to 130 epochs
+ 6 files changed, 41875 insertions(+
+  push: OK
+
+======================================================================
+  TIER 5: C1_ssi_msm (120 epochs, resume from Tier 4 epoch 30)
+  Config: exp_C1_ssi_msm.yaml
+  Checkpoint: /home/ubuntu/experiments/kinecmamba/experiments/results/tier4/C1_ssi_msm_2026_06_30_T_05_41_42/latest_epoch.bin
+  Output: /home/ubuntu/experiments/kinecmamba/experiments/results/tier5/C1_ssi_msm
+======================================================================
+  Started: 2026-07-02 00:59
+  Finished: 07:46 (1846.8 min)
+  MPJPE last epoch: 47.34
+  MPJPE best epoch: 46.25
+  P-MPJPE last:     38.41
+  P-MPJPE best:     38.21
+  [saved] /home/ubuntu/experiments/kinecmamba/experiments/results/tier5/tier5_results.csv
+
+--- Git push: exp/tier5: C1_ssi_msm complete (120 epochs) ---
