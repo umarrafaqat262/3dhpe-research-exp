@@ -208,3 +208,20 @@ C1_ssi_msm               54.0       54.0       44.3       -0.6
   [saved] /home/ubuntu/experiments/kinecmamba/experiments/results/tier5/tier5_results.csv
 
 --- Git push: exp/tier5: C1_ssi_msm complete (120 epochs) ---
+  commit: [exp/comparison 3473f0c0] exp/tier5: C1_ssi_msm complete (120 epochs)
+ 6 files changed, 374469 inser
+  push: OK
+
+
+===========================================================================
+  TIER 5 FINAL RESULTS (120+130 epochs)
+===========================================================================
+Experiment         MPJPE_last MPJPE_best    P-MPJPE  Δ vs base
+------------------ ---------- ---------- ---------- ----------
+B1_hypergcn              47.7       46.4       38.4        ---
+B1_hypergcn_extend       46.5       46.4       38.1        ---
+C1_ssi_msm               47.3       46.3       38.2        ---
+===========================================================================
+  [saved] /home/ubuntu/experiments/kinecmamba/experiments/results/tier5/tier5_results.csv
+
+--- Git push: exp/tier5: all experiments complete ---
