@@ -3,13 +3,16 @@ wandb/
 __pycache__/
 *.pyc
 *.so
+*.bin
+*.egg-info/
+pipeline_output.log
 experiments/exp*/
+experiments/results/*_2026_*/
+experiments/results/*/*_2026_*/
 kinecmamba/data/
 kinecmamba/kernels/build/
 kinecmamba/kernels/selective_scan/build/
-kinecmamba/__pycache__/
 kinecmamba/kernels/selective_scan/selective_scan.egg-info/
-*.egg-info/
 kinecmamba/.github/
 kinecmamba/.gitignore
 kinecmamba/LICENSE
@@ -20,7 +23,6 @@ kinecmamba/configs/pose3d/MB_ft_h36m_global.yaml
 kinecmamba/configs/pose3d/MB_ft_h36m_global_lite.yaml
 kinecmamba/configs/pose3d/MB_train_h36m.yaml
 kinecmamba/configs/pose3d/PoseMamba_train_h36m_B.yaml
-
 kinecmamba/convert_img2video.py
 kinecmamba/demo.sh
 kinecmamba/eval.sh
@@ -35,5 +37,3 @@ kinecmamba/notebooks/
 kinecmamba/pose3d/
 kinecmamba/scripts/
 kinecmamba/tools/
-experiments/exp
-wandb
