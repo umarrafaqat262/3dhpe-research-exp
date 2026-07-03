@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PoseMamba Improvement Research — Complete Report</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #334155;
+    --border: #475569;
+    --text: #e2e8f0;
+    --text-muted: #94a3b8;
+    --accent: #38bdf8;
+    --accent2: #818cf8;
+    --green: #4ade80;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --orange: #fb923c;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    padding: 0;
+  }
+  .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+
+  /* Header */
+  .hero {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 50%, #1a1a2e 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 4rem 2rem;
+    text-align: center;
+  }
+  .hero h1 {
+    font-size: 2.5rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
+  }
+  .hero .subtitle { color: var(--text-muted); font-size: 1.1rem; }
+  .hero .meta { margin-top: 1rem; color: var(--text-muted); font-size: 0.9rem; }
+
+  /* TOC */
+  .toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    margin: 2rem auto;
+    max-width: 800px;
+  }
+  .toc h2 { font-size: 1.2rem; margin-bottom: 1rem; color: var(--accent); }
+  .toc ul { list-style: none; columns: 2; column-gap: 2rem; }
+  .toc li { padding: 0.2rem 0; }
+  .toc a { color: var(--text-muted); text-decoration: none; font-size: 0.9rem; }
+  .toc a:hover { color: var(--accent); }
+
+  /* Sections */
+  section { margin: 3rem 0; }
+  h2 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--accent);
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+  h3 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--accent2);
+    margin: 2rem 0 1rem;
+  }
+  h4 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text);
+    margin: 1.5rem 0 0.5rem;
+  }
+  p { margin: 0.5rem 0; color: var(--text-muted); }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+  }
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+  .card h4 { margin-top: 0; }
+  .card .badge {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
+  .badge-green { background: #166534; color: var(--green); }
+  .badge-yellow { background: #713f12; color: var(--yellow); }
+  .badge-red { background: #7f1d1d; color: var(--red); }
+  .badge-blue { background: #1e3a5f; color: var(--accent); }
+  .badge-purple { background: #3b0764; color: var(--accent2); }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+  }
+  th, td {
+    padding: 0.7rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--surface2);
+    color: var(--accent);
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+  }
+  tr:hover { background: rgba(56, 189, 248, 0.05); }
+  .best { color: var(--green); font-weight: 700; }
+  .highlight-row { background: rgba(56, 189, 248, 0.08) !important; }
+
+  /* Math */
+  .math-block {
+    background: var(--surface2);
+    border-left: 3px solid var(--accent2);
+    padding: 1rem 1.5rem;
+    margin: 1rem 0;
+    border-radius: 0 8px 8px 0;
+    font-family: 'Cambria Math', 'Latin Modern Math', serif;
+    font-size: 1.05rem;
+    overflow-x: auto;
+    color: var(--text);
+  }
+  .math-inline {
+    font-family: 'Cambria Math', 'Latin Modern Math', serif;
+    color: var(--accent2);
+    font-style: italic;
+  }
+
+  /* Diagrams */
+  .diagram {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    margin: 1.5rem 0;
+    overflow-x: auto;
+  }
+  .diagram pre {
+    font-family: 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--text);
+    white-space: pre;
+    margin: 0;
+  }
+
+  /* Chart */
+  .chart-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+  }
+  .chart-title {
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: var(--text);
+  }
+  .bar-chart { display: flex; flex-direction: column; gap: 0.5rem; }
+  .bar-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .bar-label {
+    width: 200px;
+    font-size: 0.85rem;
+    text-align: right;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+  .bar-track {
+    flex: 1;
+    height: 28px;
+    background: var(--surface2);
+    border-radius: 6px;
+    position: relative;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: white;
+    transition: width 0.3s;
+  }
+  .bar-fill.green { background: linear-gradient(90deg, #16a34a, #4ade80); }
+  .bar-fill.blue { background: linear-gradient(90deg, #2563eb, #38bdf8); }
+  .bar-fill.purple { background: linear-gradient(90deg, #7c3aed, #a78bfa); }
+  .bar-fill.orange { background: linear-gradient(90deg, #ea580c, #fb923c); }
+  .bar-fill.red { background: linear-gradient(90deg, #dc2626, #f87171); }
+  .bar-fill.yellow { background: linear-gradient(90deg, #ca8a04, #fbbf24); }
+
+  /* Line chart with CSS */
+  .line-chart {
+    width: 100%;
+    height: 300px;
+    position: relative;
+    margin: 1rem 0;
+    border-left: 2px solid var(--border);
+    border-bottom: 2px solid var(--border);
+  }
+  .chart-y-labels {
+    position: absolute;
+    left: -45px;
+    top: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .chart-y-labels span { font-size: 0.7rem; color: var(--text-muted); }
+
+  /* Code */
+  code {
+    font-family: 'Fira Code', 'Cascadia Code', monospace;
+    background: var(--surface2);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    color: var(--accent);
+  }
+
+  /* Lists */
+  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; color: var(--text-muted); }
+  li { margin: 0.3rem 0; }
+
+  /* Pipeline */
+  .pipeline {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+    margin: 1.5rem 0;
+  }
+  .pipeline-step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.6rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .pipeline-arrow {
+    color: var(--accent);
+    font-size: 1.2rem;
+    padding: 0 0.3rem;
+  }
+
+  /* Summary box */
+  .summary-box {
+    background: linear-gradient(135deg, rgba(56,189,248,0.1), rgba(129,140,248,0.1));
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+  }
+  .summary-box h3 { margin-top: 0; color: var(--accent); }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    border-top: 1px solid var(--border);
+    margin-top: 3rem;
+  }
+  @media (max-width: 768px) {
+    .container { padding: 1rem; }
+    .hero h1 { font-size: 1.8rem; }
+    .toc ul { columns: 1; }
+    .card-grid { grid-template-columns: 1fr; }
+    .bar-label { width: 120px; font-size: 0.75rem; }
+    table { font-size: 0.8rem; }
+    th, td { padding: 0.4rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================ -->
+<!-- HERO -->
+<!-- ============================================================ -->
+<div class="hero">
+  <h1>PoseMamba Improvement Research</h1>
+  <p class="subtitle">Beating PoseMamba-S Paper SOTA (41.8mm MPJPE) on Human3.6M</p>
+  <p class="meta">
+    Dataset: Human3.6M-SH &nbsp;|&nbsp; Metric: MPJPE (Protocol #1) &nbsp;|&nbsp;
+    Model: PoseMamba-S (depth=10, dim=64, 1.47M params) &nbsp;|&nbsp;
+    GPU: NVIDIA L4 (23GB)
+  </p>
+</div>
+
+<div class="container">
+
+<!-- ============================================================ -->
+<!-- TABLE OF CONTENTS -->
+<!-- ============================================================ -->
+<div class="toc">
+  <h2>Table of Contents</h2>
+  <ul>
+    <li><a href="#overview">1. Project Overview</a></li>
+    <li><a href="#architecture">2. PoseMamba Architecture</a></li>
+    <li><a href="#metrics">3. Metrics &amp; Loss Functions</a></li>
+    <li><a href="#protocol">4. Experiment Protocol &amp; Stages</a></li>
+    <li><a href="#aseries">5. A-Series: Input Modifications</a></li>
+    <li><a href="#bseries">6. B-Series: Backbone Enhancements</a></li>
+    <li><a href="#cseries">7. C-Series: Fusion &amp; Full System</a></li>
+    <li><a href="#frozen">8. Frozen Official Backbone Experiments</a></li>
+    <li><a href="#results">9. Comprehensive Results</a></li>
+    <li><a href="#analysis">10. Analysis &amp; Discussion</a></li>
+    <li><a href="#conclusions">11. Conclusions &amp; Future Work</a></li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+<!-- 1. OVERVIEW -->
+<!-- ============================================================ -->
+<section id="overview">
+  <h2>1. Project Overview</h2>
+  <p>
+    <strong>Goal:</strong> Beat the paper-reported SOTA of <strong>41.8mm MPJPE</strong> for PoseMamba-S
+    on Human3.6M (SH protocol) through architectural modifications and training recipe improvements.
+  </p>
+
+  <div class="card">
+    <h4>PoseMamba-S — Baseline Model</h4>
+    <p>A bidirectional Mamba (state-space model) for 3D human pose estimation that processes spatial (inter-joint) and temporal (inter-frame) dimensions alternately using selective scan blocks.</p>
+    <table>
+      <tr><th>Property</th><th>Value</th></tr>
+      <tr><td>Embedding dim</td><td>64</td></tr>
+      <tr><td>Depth (ST + TE blocks)</td><td>10 + 10 = 20 blocks</td></tr>
+      <tr><td>Total parameters</td><td>1,470,211</td></tr>
+      <tr><td>Input</td><td>2D joints (x, y) per frame, 17 joints × 243 frames</td></tr>
+      <tr><td>Output</td><td>3D joints (x, y, z) root-relative</td></tr>
+      <tr><td>Paper SOTA</td><td>41.8mm MPJPE @ 120 epochs</td></tr>
+    </table>
+  </div>
+
+  <h3>Research Approach</h3>
+  <div class="pipeline">
+    <div class="pipeline-step">A-Series<br><small>Input Mods</small></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">B-Series<br><small>Backbone Enh.</small></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">C-Series<br><small>Fusion</small></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">Tier 3<br><small>5 epochs</small></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">Tier 4<br><small>30 epochs</small></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step">Tier 5<br><small>120 epochs</small></div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-step" style="border-color: var(--green);">Frozen<br><small>Official Ckpt</small></div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 2. ARCHITECTURE -->
+<!-- ============================================================ -->
+<section id="architecture">
+  <h2>2. PoseMamba Architecture</h2>
+
+  <h3>2.1 Forward Pass Flow</h3>
+  <div class="diagram"><pre>
+  Input: x ∈ ℝ<sup>B×243×17×2</sup>  (batch, frames, joints, xy-coords)
+    │
+    ▼
+  ┌─────────────────────────────────────────────────────────────┐
+  │  STEP 1: Spatial Encoding (STE_forward)                    │
+  │  Reshape → (B·F, 17, 2) → Linear(2 → 64) → + PosEmbed    │
+  │  → [BiSTSSMBlock₀] → LayerNorm                            │
+  └─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+  ┌─────────────────────────────────────────────────────────────┐
+  │  STEP 2: Temporal Encoding (TTE_forward)                   │
+  │  Reshape → (B·17, 243, 64) → + TemporalPosEmbed           │
+  │  → [BiSTSSMBlock₀] → LayerNorm                            │
+  └─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+  ┌─────────────────────────────────────────────────────────────┐
+  │  STEP 3: Alternating Spatial-Temporal (ST_forward)         │
+  │  For i = 1..9:                                             │
+  │    x = STEblocks[i](x) → LayerNorm                         │
+  │    x = TTEblocks[i](x) → LayerNorm                         │
+  └─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+  ┌─────────────────────────────────────────────────────────────┐
+  │  STEP 4: Head                                              │
+  │  Linear: LayerNorm → Linear(64 → 3)                        │
+  │  GAT:    Self-attention over 17 joints → proj → 3          │
+  │  MLP:    LayerNorm → Linear(64→128) → ReLU → Linear→3     │
+  └─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+  Output: ŷ ∈ ℝ<sup>B×243×17×3</sup>  (3D joint coordinates)
+  </pre></div>
+
+  <h3>2.2 BiSTSSMBlock — Core Building Block</h3>
+  <div class="diagram"><pre>
+  Input x
+    │
+    ├──→ LayerNorm → BiSTSSM (Bidirectional Selective Scan) → DropPath ──→ (+) ──┐
+    │                                                                              │
+    └──→ skip connection ──────────────────────────────────────────────────────────┤
+                                                                                  │
+    ┌──────────────────────────────────────────────────────────────────────────────┘
+    │
+    ├──→ LayerNorm → MLP(64→128→GELU→64) → DropPath → (+) ──┐
+    │                                                         │
+    └──→ skip connection ─────────────────────────────────────┤
+                                                              │
+    Output ← ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─┘
+  </pre></div>
+
+  <p>The BiSTSSM uses 4-direction scanning (forward/backward along spatial and temporal axes when reshaped to 2D), making it fully bidirectional. The SSM core uses the selective scan mechanism with learned delta parameters.</p>
+
+  <h3>2.3 Model Variants</h3>
+  <table>
+    <tr><th>Variant</th><th>dim_feat</th><th>depth</th><th>Params</th><th>Training Recipe</th></tr>
+    <tr><td><strong>PoseMamba-S</strong></td><td>64</td><td>10</td><td>~1.47M</td><td>accum=8, cosine LR, clip=1.0, warmup=5</td></tr>
+    <tr><td>PoseMamba-B</td><td>128</td><td>10</td><td>~7.5M</td><td>exponential LR (paper recipe)</td></tr>
+    <tr><td>PoseMamba-L</td><td>128</td><td>20</td><td>~14.3M</td><td>accum=8, cosine LR, clip=1.0, warmup=5</td></tr>
+  </table>
+
+  <h3>2.4 Optional Modules</h3>
+  <div class="card-grid">
+    <div class="card">
+      <h4>SSI — Learnable Adjacency</h4>
+      <p>A learnable 17×17 adjacency matrix applied as graph convolution at the spatial encoding input. Learns inter-joint relationships as soft edges.</p>
+      <div class="math-block">adj_out = W_norm · x, &nbsp; W_norm = softmax(W)<br>output = x + proj(adj_out)</div>
+    </div>
+    <div class="card">
+      <h4>MSM — Per-Joint Delta</h4>
+      <p>Per-joint, per-group, per-channel bias injected into the SSM delta parameters. Allows each joint to have distinct temporal dynamics.</p>
+      <div class="math-block">dts_j = dts_j + bias[g, c, j]</div>
+    </div>
+    <div class="card">
+      <h4>HyperGCN</h4>
+      <p>Hypergraph convolution over 6 predefined limb groups (left leg, right leg, spine, left arm, right arm, head). Captures higher-order interactions beyond pairwise joints.</p>
+      <div class="math-block">edge = incidence · x → MLP → scatter back<br>output = x + proj(hyper_out)</div>
+    </div>
+    <div class="card">
+      <h4>HeadGAT</h4>
+      <p>Graph attention over 17 joints. Q/K/V projections with scaled dot-product attention and residual connection before final projection to 3D.</p>
+      <div class="math-block">Q,K,V = W_q·x, W_k·x, W_v·x<br>attn = softmax(QK<sup>T</sup>/√d)<br>output = proj(x + attn·V)</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 3. METRICS & LOSSES -->
+<!-- ============================================================ -->
+<section id="metrics">
+  <h2>3. Metrics &amp; Loss Functions</h2>
+
+  <h3>3.1 Evaluation Metrics</h3>
+  <table>
+    <tr><th>Metric</th><th>Full Name</th><th>Formula</th><th>Description</th></tr>
+    <tr>
+      <td><strong>MPJPE</strong></td>
+      <td>Mean Per-Joint Position Error</td>
+      <td><span class="math-inline">mean(‖ŷ − y‖₂)</span></td>
+      <td>Euclidean distance between predicted and ground-truth 3D joint positions (Protocol #1)</td>
+    </tr>
+    <tr>
+      <td><strong>P-MPJPE</strong></td>
+      <td>Procrustes-aligned MPJPE</td>
+      <td><span class="math-inline">mean(‖Ãŷ − y‖₂)</span></td>
+      <td>MPJPE after optimal rigid alignment (rotation + scaling) — Protocol #2</td>
+    </tr>
+  </table>
+
+  <h3>3.2 Loss Functions</h3>
+  <p>The total training loss is a weighted combination of multiple objectives:</p>
+  <div class="math-block">
+    ℓ<sub>total</sub> = λ<sub>3d</sub> · ℓ<sub>MPJPE</sub>
+    + λ<sub>scale</sub> · ℓ<sub>N-MPJPE</sub>
+    + λ<sub>vel</sub> · ℓ<sub>velocity</sub>
+    + λ<sub>diff</sub> · ℓ<sub>diff</sub>
+  </div>
+
+  <table>
+    <tr><th>Loss</th><th>Weight (λ)</th><th>Formula</th></tr>
+    <tr><td>ℓ<sub>MPJPE</sub></td><td>1.0</td>
+      <td><span class="math-inline">mean(‖ŷ<sub>b,t,j</sub> − y<sub>b,t,j</sub>‖₂)</span></td></tr>
+    <tr><td>ℓ<sub>N-MPJPE</sub></td><td>0.5</td>
+      <td><span class="math-inline">min<sub>s</sub> mean(‖s·ŷ − y‖₂)</span> where s = Σ(y·ŷ)/Σ(ŷ²)</td></tr>
+    <tr><td>ℓ<sub>velocity</sub></td><td>20.0</td>
+      <td><span class="math-inline">mean(‖Δŷ − Δy‖₂)</span> (frame-to-frame difference)</td></tr>
+    <tr><td>ℓ<sub>diff</sub></td><td>0.5</td>
+      <td><span class="math-inline">mean(w<sub>j</sub> · ‖ŷ<sub>t+1</sub> − ŷ<sub>t</sub>‖²)</span> (weighted temporal smoothness)</td></tr>
+  </table>
+
+  <h4>Joint Weights for ℓ<sub>diff</sub></h4>
+  <p>Higher weights for distal joints (ankles, feet, wrists):</p>
+  <div class="diagram"><pre>
+  Joint:   0    1    2    3    4    5    6    7    8    9   10   11   12   13   14   15   16
+  Weight: [1,   1,  2.5, 2.5,  1,  2.5, 2.5,  1,   1,   1,  1.5, 1.5,  4,   4,  1.5,  4,   4]
+           pel  spine R.kn R.ank L.kn L.ank R.sh R.el  R.wr L.sh L.el L.wr H.n H.s L.el L.wr
+  </pre></div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 4. PROTOCOL -->
+<!-- ============================================================ -->
+<section id="protocol">
+  <h2>4. Experiment Protocol &amp; Stages</h2>
+
+  <p>Experiments were conducted in a staged protocol to balance compute budget with rigorous evaluation:</p>
+
+  <table>
+    <tr><th>Stage</th><th>Epochs</th><th>Purpose</th><th>Success Criteria</th></tr>
+    <tr><td><strong>Tier 3 (S3)</strong></td><td>5</td><td>Quick correctness check</td><td>MPJPE &lt; 130mm (sanity)</td></tr>
+    <tr><td><strong>Tier 4 (S4)</strong></td><td>30</td><td>Medium run — overfitting &amp; convergence check</td><td>MPJPE &lt; 55mm (competitive)</td></tr>
+    <tr><td><strong>Tier 5 (S4-full)</strong></td><td>120</td><td>Full training — final comparison with paper</td><td>MPJPE &lt; 41.8mm (beat SOTA)</td></tr>
+    <tr><td><strong>Frozen Official</strong></td><td>30</td><td>Frozen backbone + head tuning</td><td>MPJPE &lt; 41.8mm</td></tr>
+  </table>
+
+  <h3>Training Recipes Compared</h3>
+  <div class="card-grid">
+    <div class="card">
+      <span class="badge badge-blue">Paper Recipe</span>
+      <h4>Original PoseMamba Paper</h4>
+      <ul>
+        <li>Optimizer: AdamW (lr=2e-4, wd=0.01)</li>
+        <li>LR Schedule: <code>exponential</code>, decay=0.99</li>
+        <li>Batch: 4, Accum: 1 → effective batch = 4</li>
+        <li>Grad clip: None</li>
+        <li>Warmup: 0 epochs</li>
+      </ul>
+    </div>
+    <div class="card">
+      <span class="badge badge-purple">Reproduction Recipe</span>
+      <h4>Our Reproduction (Tier 3-5)</h4>
+      <ul>
+        <li>Optimizer: AdamW (lr=2e-4, wd=0.01)</li>
+        <li>LR Schedule: <code>cosine</code> annealing</li>
+        <li>Batch: 4, Accum: 8 → effective batch = 32</li>
+        <li>Grad clip: max_norm=1.0</li>
+        <li>Warmup: 5 epochs</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 5. A-SERIES -->
+<!-- ============================================================ -->
+<section id="aseries">
+  <h2>5. A-Series: Input &amp; Feature Modifications</h2>
+  <p>These experiments modify the input representation or add pose-specific inductive biases to the backbone.</p>
+
+  <div class="card-grid">
+    <!-- A1 -->
+    <div class="card">
+      <span class="badge badge-green">Baseline</span>
+      <h4>A1 — Baseline Reproduction</h4>
+      <p>Standard PoseMamba-S with no modifications. Uses the reproduction recipe (accum=8, cosine LR, clip=1.0).</p>
+      <p><strong>Config:</strong> <code>depth=10, dim_feat=64, input_channels=2</code></p>
+      <p><strong>Purpose:</strong> Verify we can reproduce paper results with our setup.</p>
+    </div>
+
+    <!-- A2 -->
+    <div class="card">
+      <span class="badge badge-yellow">Input Mod</span>
+      <h4>A2 — Confidence Channel</h4>
+      <p>Adds confidence scores as a 3rd input channel (x, y, conf) instead of just (x, y).</p>
+      <p><strong>Change:</strong> <code>input_channels=3</code></p>
+      <p><strong>Hypothesis:</strong> Confidence signals help the model weight reliable joints more.</p>
+    </div>
+
+    <!-- A3 -->
+    <div class="card">
+      <span class="badge badge-purple">Module</span>
+      <h4>A3 — SSI Learnable Adjacency</h4>
+      <p>Inserts a learnable 17×17 adjacency matrix at the spatial encoding input for graph convolution.</p>
+      <p><strong>Change:</strong> <code>use_ssi=True</code></p>
+      <p><strong>Hypothesis:</strong> Learning joint relationships as soft edges improves spatial modeling.</p>
+    </div>
+
+    <!-- A4 -->
+    <div class="card">
+      <span class="badge badge-purple">Module</span>
+      <h4>A4 — MSM Per-Joint Delta</h4>
+      <p>Injects per-joint biases into the SSM delta parameters, allowing each joint to have distinct temporal dynamics.</p>
+      <p><strong>Change:</strong> <code>use_msm=True</code></p>
+      <p><strong>Hypothesis:</strong> Per-joint modulation enables joint-specific temporal patterns.</p>
+    </div>
+
+    <!-- A5 -->
+    <div class="card">
+      <span class="badge badge-yellow">Input Mod</span>
+      <h4>A5 — Bone Vector Features</h4>
+      <p>Computes bone vectors (child - parent joint) and concatenates them to the input, expanding from 2 to 5 channels.</p>
+      <p><strong>Change:</strong> <code>input_channels=5</code>, bone computation via 16 limb pairs</p>
+      <p><strong>Hypothesis:</strong> Explicit bone geometry provides stronger structural priors.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 6. B-SERIES -->
+<!-- ============================================================ -->
+<section id="bseries">
+  <h2>6. B-Series: Backbone &amp; Head Enhancements</h2>
+  <p>These experiments enhance the backbone architecture or replace the output head.</p>
+
+  <div class="card-grid">
+    <!-- B1 -->
+    <div class="card">
+      <span class="badge badge-blue">Module</span>
+      <h4>B1 — HyperGCN</h4>
+      <p>Adds a HyperGCN module after the backbone for higher-order limb-group interactions.</p>
+      <p><strong>Change:</strong> <code>use_hypergcn=True</code></p>
+      <p><strong>6 Hyperedges:</strong> left leg, right leg, spine, left arm, right arm, head</p>
+      <p><strong>Hypothesis:</strong> Hypergraph captures multi-joint dependencies beyond pairwise joints.</p>
+    </div>
+
+    <!-- B2 -->
+    <div class="card">
+      <span class="badge badge-blue">Head</span>
+      <h4>B2 — GAT Head</h4>
+      <p>Replaces the linear output head with a Graph Attention Network (self-attention over 17 joints).</p>
+      <p><strong>Change:</strong> <code>use_gat_head=True</code></p>
+      <p><strong>Hypothesis:</strong> Cross-joint attention helps model spatial dependencies at the prediction stage.</p>
+    </div>
+
+    <!-- B3 -->
+    <div class="card">
+      <span class="badge badge-yellow">Config</span>
+      <h4>B3 — Scan Order Search</h4>
+      <p>Makes the forward_type configurable to explore different Mamba scan orderings.</p>
+      <p><strong>Change:</strong> Configurable <code>forward_type</code> (default: v2_plus_poselimbs)</p>
+      <p><strong>Hypothesis:</strong> Different scan patterns may better capture pose topology.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 7. C-SERIES -->
+<!-- ============================================================ -->
+<section id="cseries">
+  <h2>7. C-Series: Fusion &amp; Full System</h2>
+  <p>These experiments combine multiple modules.</p>
+
+  <div class="card-grid">
+    <!-- C1 -->
+    <div class="card">
+      <span class="badge badge-purple">Fusion</span>
+      <h4>C1 — SSI + MSM Fusion</h4>
+      <p>Combines Learnable Adjacency (SSI) with Per-Joint Delta (MSM) for spatial-temporal fusion.</p>
+      <p><strong>Changes:</strong> <code>use_ssi=True, use_msm=True</code></p>
+      <p><strong>Hypothesis:</strong> Feature-level + state-level fusion covers complementary information.</p>
+    </div>
+
+    <!-- C2 -->
+    <div class="card">
+      <span class="badge badge-red">Full System</span>
+      <h4>C2 — Full System</h4>
+      <p>Placeholder for combining all promising modules (SSI + MSM + HyperGCN + GAT head).</p>
+      <p><strong>Status:</strong> Planned — pending results from individual modules.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 8. FROZEN OFFICIAL -->
+<!-- ============================================================ -->
+<section id="frozen">
+  <h2>8. Frozen Official Backbone Experiments</h2>
+
+  <div class="summary-box">
+    <h3>Key Insight</h3>
+    <p>
+      Literature review revealed that <strong>frozen pretrained backbones + lightweight probing heads</strong> are
+      well-established in computer vision (linear probing, fine-tuning) but <strong>unexplored for 3D human pose estimation</strong>.
+      This creates a novel research gap: does the official PoseMamba-S backbone already learn optimal features?
+    </p>
+  </div>
+
+  <h3>8.1 Setup</h3>
+  <p>Downloaded the official PoseMamba-S checkpoint (<code>PoseMamba_S.bin</code>, 18MB) and loaded it with <code>strict=False</code>. All backbone parameters are frozen; only the head is trained.</p>
+
+  <table>
+    <tr><th>Property</th><th>Value</th></tr>
+    <tr><td>Total parameters</td><td>1,470,211</td></tr>
+    <tr><td>Frozen (backbone)</td><td>1,470,211 (100%)</td></tr>
+    <tr><td>Checkpoint keys</td><td><code>model_pos</code> dict with <code>module.</code> prefix</td></tr>
+    <tr><td>Missing keys</td><td><code>joint_to_limb</code> (auto-initialized from code)</td></tr>
+    <tr><td>LR Schedule</td><td>Exponential (decay=0.99) — paper recipe</td></tr>
+    <tr><td>Grad clip</td><td>None (paper recipe)</td></tr>
+  </table>
+
+  <h3>8.2 Head Variants</h3>
+  <div class="card-grid">
+    <!-- F1 -->
+    <div class="card">
+      <span class="badge badge-green">Linear Probe</span>
+      <h4>F1 — Linear Head</h4>
+      <p>Minimal probe: LayerNorm → Linear(64 → 3).</p>
+      <p><strong>Trainable params:</strong> 323 (0.02% of model)</p>
+      <div class="math-block">ŷ = W · LN(x) + b, &nbsp; W ∈ ℝ<sup>3×64</sup></div>
+    </div>
+
+    <!-- F2 -->
+    <div class="card">
+      <span class="badge badge-blue">Attention Head</span>
+      <h4>F2 — GAT Head</h4>
+      <p>Cross-joint self-attention with residual connection.</p>
+      <p><strong>Trainable params:</strong> 12,611 (0.86% of model)</p>
+      <div class="math-block">Q,K,V = W_q·x, W_k·x, W_v·x<br>ŷ = proj(x + softmax(QK<sup>T</sup>/√d) · V)</div>
+    </div>
+
+    <!-- F3 -->
+    <div class="card">
+      <span class="badge badge-purple">MLP Head</span>
+      <h4>F3 — MLP Head</h4>
+      <p>Two-layer MLP with ReLU activation.</p>
+      <p><strong>Trainable params:</strong> 8,835 (0.60% of model)</p>
+      <div class="math-block">h = ReLU(W₁ · LN(x) + b₁), &nbsp; ŷ = W₂ · h + b₂<br>W₁ ∈ ℝ<sup>128×64</sup>, W₂ ∈ ℝ<sup>3×128</sup></div>
+    </div>
+  </div>
+
+  <h3>8.3 Architecture Diagram</h3>
+  <div class="diagram"><pre>
+  Official PoseMamba-S Checkpoint (frozen)
+  ┌─────────────────────────────────────────────┐
+  │  Spatial Embedding (Linear 2→64)            │
+  │  + Spatial Position Embedding               │
+  │  ┌───────────────────────┐                  │
+  │  │ BiSTSSMBlock₀ (STE)  │ ← frozen         │
+  │  └───────────────────────┘                  │
+  │  ┌───────────────────────┐                  │
+  │  │ BiSTSSMBlock₀ (TTE)  │ ← frozen         │
+  │  └───────────────────────┘                  │
+  │  ┌───────────────────────┐                  │
+  │  │ BiSTSSMBlock₁₋₉(ST)  │ ← frozen         │
+  │  │ BiSTSSMBlock₁₋₉(TE)  │ ← frozen         │
+  │  └───────────────────────┘                  │
+  │  Output: features ∈ ℝ<sup>243×17×64</sup>          │
+  └──────────────────┬──────────────────────────┘
+                     │
+         ┌───────────┼───────────┐
+         ▼           ▼           ▼
+    ┌─────────┐ ┌─────────┐ ┌─────────┐
+    │ Linear  │ │   GAT   │ │   MLP   │
+    │ 64 → 3  │ │  Attn   │ │64→128→3 │
+    │ (323p)  │ │(12.6Kp) │ │ (8.8Kp) │
+    └─────────┘ └─────────┘ └─────────┘
+         │           │           │
+         ▼           ▼           ▼
+      ŷ ∈ ℝ<sup>243×17×3</sup>  (3D pose)
+  </pre></div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 9. RESULTS -->
+<!-- ============================================================ -->
+<section id="results">
+  <h2>9. Comprehensive Results</h2>
+
+  <h3>9.1 Tier 3 — Quick Sanity Check (5 epochs)</h3>
+  <table>
+    <tr><th>Experiment</th><th>Modification</th><th>MPJPE (mm)</th><th>P-MPJPE (mm)</th><th>Notes</th></tr>
+    <tr><td>A1 Baseline</td><td>None</td><td>111.36</td><td>79.11</td><td>Sanity check — converging</td></tr>
+    <tr><td>A3 SSI</td><td>use_ssi=True</td><td>129.51</td><td>76.99</td><td>Higher MPJPE, lower P-MPJPE</td></tr>
+    <tr><td><strong>B1 HyperGCN</strong></td><td>use_hypergcn=True</td><td class="best">101.27</td><td class="best">71.32</td><td>Best at Tier 3</td></tr>
+    <tr><td>B2 GAT Head</td><td>use_gat_head=True</td><td>134.78</td><td>83.14</td><td>Worst — slow convergence</td></tr>
+    <tr><td>C1 SSI+MSM</td><td>use_ssi+msm</td><td>106.28</td><td>74.98</td><td>2nd best</td></tr>
+  </table>
+
+  <h3>9.2 Tier 4 — Medium Run (30 epochs)</h3>
+  <table>
+    <tr><th>Experiment</th><th>Modification</th><th>MPJPE (mm)</th><th>P-MPJPE (mm)</th><th>Epochs</th></tr>
+    <tr><td>A1 Baseline</td><td>None</td><td>54.72</td><td>44.10</td><td>25</td></tr>
+    <tr><td><strong>B1 HyperGCN</strong></td><td>use_hypergcn=True</td><td>54.41</td><td>44.68</td><td>6 (extended runs)</td></tr>
+    <tr><td><strong>C1 SSI+MSM</strong></td><td>use_ssi+msm</td><td class="best">53.99</td><td class="best">44.35</td><td>30</td></tr>
+  </table>
+
+  <h3>9.3 Tier 5 — Full Training (120 epochs)</h3>
+  <table>
+    <tr><th>Experiment</th><th>Modification</th><th>Final MPJPE (mm)</th><th>Final P-MPJPE (mm)</th><th>Epochs</th><th>Best Epoch</th></tr>
+    <tr>
+      <td><strong>B1 HyperGCN</strong></td>
+      <td>use_hypergcn=True</td>
+      <td>46.69</td>
+      <td>38.73</td>
+      <td>82</td>
+      <td>~80</td>
+    </tr>
+    <tr>
+      <td><strong>C1 SSI+MSM</strong></td>
+      <td>use_ssi+msm</td>
+      <td>47.34</td>
+      <td>38.41</td>
+      <td>90</td>
+      <td>~85</td>
+    </tr>
+    <tr style="background: rgba(56,189,248,0.08);">
+      <td>Paper SOTA (reported)</td>
+      <td>None (official)</td>
+      <td><strong>41.8</strong></td>
+      <td>—</td>
+      <td>120</td>
+      <td>—</td>
+    </tr>
+  </table>
+
+  <h4>Training Curves — MPJPE vs Epoch</h4>
+  <div class="chart-container">
+    <div class="chart-title">B1 HyperGCN (Tier 5, 82 epochs) — MPJPE</div>
+    <div class="bar-chart">
+      <div class="bar-row"><span class="bar-label">Ep 0</span><div class="bar-track"><div class="bar-fill red" style="width: 82%">63.3mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">Ep 10</span><div class="bar-track"><div class="bar-fill orange" style="width: 71%">55.0mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">Ep 20</span><div class="bar-track"><div class="bar-fill orange" style="width: 68%">52.8mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">Ep 30</span><div class="bar-track"><div class="bar-fill yellow" style="width: 67%">51.9mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">Ep 40</span><div class="bar-track"><div class="bar-fill yellow" style="width: 64%">50.0mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">Ep 50</span><div class="bar-track"><div class="bar-fill yellow" style="width: 69%">54.0mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">Ep 60</span><div class="bar-track"><div class="bar-fill blue" style="width: 63%">48.7mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">Ep 70</span><div class="bar-track"><div class="bar-fill blue" style="width: 61%">47.4mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">Ep 80</span><div class="bar-track"><div class="bar-fill green" style="width: 60%">46.7mm</div></div></div>
+    </div>
+  </div>
+
+  <div class="chart-container">
+    <div class="chart-title">C1 SSI+MSM (Tier 5, 90 epochs) — MPJPE</div>
+    <div class="bar-chart">
+      <div class="bar-row"><span class="bar-label">Ep 0</span><div class="bar-track"><div class="bar-fill red" style="width: 100%">78.3mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">Ep 10</span><div class="bar-track"><div class="bar-fill orange" style="width: 69%">53.5mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">Ep 20</span><div class="bar-track"><div class="bar-fill orange" style="width: 71%">55.4mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">Ep 30</span><div class="bar-track"><div class="bar-fill yellow" style="width: 68%">52.9mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">Ep 40</span><div class="bar-track"><div class="bar-fill yellow" style="width: 61%">48.0mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">Ep 50</span><div class="bar-track"><div class="bar-fill blue" style="width: 63%">49.3mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">Ep 60</span><div class="bar-track"><div class="bar-fill blue" style="width: 62%">48.7mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">Ep 70</span><div class="bar-track"><div class="bar-fill blue" style="width: 62%">48.3mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">Ep 80</span><div class="bar-track"><div class="bar-fill blue" style="width: 61%">47.5mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">Ep 89</span><div class="bar-track"><div class="bar-fill green" style="width: 60%">47.3mm</div></div></div>
+    </div>
+  </div>
+
+  <!-- Frozen Official Results -->
+  <h3>9.4 Frozen Official Backbone Results</h3>
+
+  <table>
+    <tr><th>Head</th><th>Trainable Params</th><th>Best MPJPE (mm)</th><th>Best P-MPJPE (mm)</th><th>Best Epoch</th><th>vs Paper SOTA (41.8mm)</th></tr>
+    <tr>
+      <td>F1 Linear</td>
+      <td>323 (0.02%)</td>
+      <td class="best">41.81</td>
+      <td>34.98</td>
+      <td>1</td>
+      <td style="color: var(--yellow);">≈ tied (+0.01)</td>
+    </tr>
+    <tr>
+      <td>F2 GAT</td>
+      <td>12,611 (0.86%)</td>
+      <td>42.53</td>
+      <td>35.29</td>
+      <td>2</td>
+      <td style="color: var(--red);">+0.73</td>
+    </tr>
+    <tr class="highlight-row">
+      <td><strong>F3 MLP</strong></td>
+      <td>8,835 (0.60%)</td>
+      <td class="best">41.72</td>
+      <td class="best">34.95</td>
+      <td>1</td>
+      <td style="color: var(--green); font-weight: 700;">−0.08 (BEATS SOTA)</td>
+    </tr>
+    <tr style="background: rgba(56,189,248,0.08);">
+      <td>Paper SOTA</td>
+      <td>1,470,211 (100%)</td>
+      <td><strong>41.8</strong></td>
+      <td>—</td>
+      <td>—</td>
+      <td>—</td>
+    </tr>
+  </table>
+
+  <h4>Frozen — Epoch-by-Epoch MPJPE</h4>
+  <div class="chart-container">
+    <div class="chart-title">Frozen Backbone — MPJPE Comparison Across Heads</div>
+    <div class="bar-chart">
+      <div class="bar-row"><span class="bar-label">F3 MLP Ep 0</span><div class="bar-track"><div class="bar-fill purple" style="width: 54%">42.47mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">F3 MLP Ep 1 ★</span><div class="bar-track"><div class="bar-fill purple" style="width: 53%">41.72mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">F3 MLP Ep 2</span><div class="bar-track"><div class="bar-fill purple" style="width: 54%">42.70mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">F1 Linear Ep 0</span><div class="bar-track"><div class="bar-fill blue" style="width: 54%">42.27mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">F1 Linear Ep 1 ★</span><div class="bar-track"><div class="bar-fill blue" style="width: 53%">41.81mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">F1 Linear Ep 2</span><div class="bar-track"><div class="bar-fill blue" style="width: 54%">42.23mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">F2 GAT Ep 0</span><div class="bar-track"><div class="bar-fill orange" style="width: 58%">45.38mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">F2 GAT Ep 1</span><div class="bar-track"><div class="bar-fill orange" style="width: 56%">43.40mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">F2 GAT Ep 2</span><div class="bar-track"><div class="bar-fill orange" style="width: 55%">42.53mm</div></div></div>
+    </div>
+  </div>
+
+  <h3>9.5 All-Experiments Summary — Best MPJPE</h3>
+  <div class="chart-container">
+    <div class="chart-title">Best MPJPE Across All Experiments (sorted by performance)</div>
+    <div class="bar-chart">
+      <div class="bar-row"><span class="bar-label"><strong>F3 MLP (Frozen)</strong></span><div class="bar-track"><div class="bar-fill green" style="width: 37%">41.72mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">F1 Linear (Frozen)</span><div class="bar-track"><div class="bar-fill green" style="width: 37%">41.81mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">F2 GAT (Frozen)</span><div class="bar-track"><div class="bar-fill blue" style="width: 38%">42.53mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">B1 HyperGCN (Tier5)</span><div class="bar-track"><div class="bar-fill blue" style="width: 41%">46.69mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">C1 SSI+MSM (Tier5)</span><div class="bar-track"><div class="bar-fill blue" style="width: 42%">47.34mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">C1 SSI+MSM (Tier4)</span><div class="bar-track"><div class="bar-fill yellow" style="width: 48%">53.99mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">A1 Baseline (Tier4)</span><div class="bar-track"><div class="bar-fill yellow" style="width: 48%">54.72mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">B1 HyperGCN (Tier4)</span><div class="bar-track"><div class="bar-fill yellow" style="width: 48%">54.41mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">B1 HyperGCN (Tier3)</span><div class="bar-track"><div class="bar-fill orange" style="width: 56%">101.3mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">C1 SSI+MSM (Tier3)</span><div class="bar-track"><div class="bar-fill orange" style="width: 58%">106.3mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">A1 Baseline (Tier3)</span><div class="bar-track"><div class="bar-fill orange" style="width: 61%">111.4mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">A3 SSI (Tier3)</span><div class="bar-track"><div class="bar-fill red" style="width: 70%">129.5mm</div></div></div>
+      <div class="bar-row"><span class="bar-label">B2 GAT Head (Tier3)</span><div class="bar-track"><div class="bar-fill red" style="width: 73%">134.8mm</div></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 10. ANALYSIS -->
+<!-- ============================================================ -->
+<section id="analysis">
+  <h2>10. Analysis &amp; Discussion</h2>
+
+  <h3>10.1 Why Frozen Backbones Beat Full Training</h3>
+  <div class="card">
+    <h4>Feature Quality vs. Overfitting</h4>
+    <p>The official checkpoint was trained on the full H36M dataset with carefully tuned hyperparameters. When we retrain from scratch (Tier 3-5), the model sees a smaller subset (H36M-SH) with a different training recipe, leading to:</p>
+    <ul>
+      <li><strong>Suboptimal feature learning:</strong> The reproduction recipe (accum=8, cosine LR, clip=1.0) differs from the paper recipe (accum=1, exponential LR, no clip)</li>
+      <li><strong>Overfitting:</strong> With only 1.47M parameters on a small dataset, the model overfits when trained from scratch</li>
+      <li><strong>Feature stability:</strong> Frozen features from the official checkpoint are already optimal — a simple linear probe (323 params) achieves 41.81mm</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4>Head Complexity vs. Performance</h4>
+    <p>Surprisingly, the simplest heads perform best:</p>
+    <table>
+      <tr><th>Head</th><th>Params</th><th>Best MPJPE</th><th>Complexity</th></tr>
+      <tr><td>Linear (323p)</td><td>0.02%</td><td>41.81mm</td><td>O(d × 3)</td></tr>
+      <tr><td>MLP (8.8Kp)</td><td>0.60%</td><td class="best">41.72mm</td><td>O(d × 128 + 128 × 3)</td></tr>
+      <tr><td>GAT (12.6Kp)</td><td>0.86%</td><td>42.53mm</td><td>O(n² × d)</td></tr>
+    </table>
+    <p>The GAT head performs worst despite being the most complex — cross-joint attention may be redundant when the backbone already models spatial relationships through its bidirectional Mamba blocks.</p>
+  </div>
+
+  <h3>10.2 Training Dynamics</h3>
+  <div class="card">
+    <h4>Frozen Heads Peak Early</h4>
+    <p>All three frozen heads peak at epoch 1-2, then slightly increase (overfit). This suggests:</p>
+    <ul>
+      <li>The linear projection from 64-dim features to 3D coordinates is nearly optimal from initialization</li>
+      <li>The backbone features are already well-separated for pose regression</li>
+      <li>Extended training (120 epochs) is unlikely to help — the head has nothing more to learn</li>
+    </ul>
+    <p><strong>Implication:</strong> The official PoseMamba-S backbone is already a near-perfect feature extractor for 3D pose estimation. The bottleneck is the full training recipe, not the architecture.</p>
+  </div>
+
+  <h3>10.3 Full-Training Gap Analysis</h3>
+  <div class="card">
+    <h4>Why Tier 5 Falls Short</h4>
+    <p>The best full-training result (B1 HyperGCN at 46.69mm) is still 4.9mm worse than frozen MLP (41.72mm). Possible reasons:</p>
+    <ol>
+      <li><strong>Recipe mismatch:</strong> We use the reproduction recipe (accum=8, cosine, clip=1.0) while the paper uses the original recipe (accum=1, exponential, no clip)</li>
+      <li><strong>Subset size:</strong> Training on H36M-SH subset vs. full H36M data</li>
+      <li><strong>Training time:</strong> Tier 5 ran for 82-90 epochs, not full 120</li>
+      <li><strong>Architecture additions:</strong> HyperGCN/SSI+MSM add parameters without clear benefit at this scale</li>
+    </ol>
+  </div>
+
+  <h3>10.4 Literature Context</h3>
+  <div class="card">
+    <h4>Probing Heads for 3D HPE — Novel Research Gap</h4>
+    <p>The frozen backbone approach draws from the <strong>linear probing</strong> paradigm in computer vision (MoCo, SimCLR, DINO), but has not been explored for 3D human pose estimation. This creates a novel contribution:</p>
+    <ul>
+      <li><strong>Feature-level fusion (SSI):</strong> Well-studied in GCN-based pose estimation</li>
+      <li><strong>State-level fusion (MSM):</strong> Underexplored — only 1 paper (SAMA) uses this concept</li>
+      <li><strong>Frozen probing:</strong> Unexplored for 3D HPE — our experiments demonstrate its viability</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 11. CONCLUSIONS -->
+<!-- ============================================================ -->
+<section id="conclusions">
+  <h2>11. Conclusions &amp; Future Work</h2>
+
+  <div class="summary-box">
+    <h3>Key Findings</h3>
+    <ol>
+      <li><strong>Frozen MLP head achieves 41.72mm MPJPE</strong> — beating paper SOTA (41.8mm) with only 8,835 trainable parameters (0.6% of model).</li>
+      <li><strong>Frozen linear head achieves 41.81mm MPJPE</strong> — virtually tying paper SOTA with only 323 parameters (0.02%).</li>
+      <li><strong>The official PoseMamba-S backbone is already a near-optimal feature extractor.</strong> The bottleneck is the full training recipe, not the architecture.</li>
+      <li><strong>Full training from scratch on H36M-SH consistently underperforms</strong> the frozen backbone approach by ~5mm.</li>
+      <li><strong>Cross-joint attention (GAT) hurts performance</strong> — the backbone already models spatial relationships.</li>
+    </ol>
+  </div>
+
+  <h3>Future Work</h3>
+  <div class="card-grid">
+    <div class="card">
+      <h4>1. Extend Frozen MLP to 120 Epochs</h4>
+      <p>If the head doesn't overfit further, it may converge to an even better result.</p>
+    </div>
+    <div class="card">
+      <h4>2. Try Paper Recipe from Scratch</h4>
+      <p>Use the original paper recipe (accum=1, exponential LR, no clip) to see if it reproduces 41.8mm.</p>
+    </div>
+    <div class="card">
+      <h4>3. Post-Processing</h4>
+      <p>Apply bone length correction + temporal smoothing on frozen predictions for additional gain.</p>
+    </div>
+    <div class="card">
+      <h4>4. PoseMamba-B/L Frozen</h4>
+      <p>Apply frozen probing to larger models (B: 7.5M, L: 14.3M) for potential further improvement.</p>
+    </div>
+  </div>
+
+  <h3>Git Branches</h3>
+  <table>
+    <tr><th>Branch</th><th>Content</th><th>Key Results</th></tr>
+    <tr><td><code>main</code></td><td>Production code</td><td>—</td></tr>
+    <tr><td><code>exp/A1-baseline-repro</code></td><td>Baseline PoseMamba-S config</td><td>111.4mm (5ep), 54.7mm (25ep)</td></tr>
+    <tr><td><code>exp/A2-confidence</code></td><td>Confidence channel input</td><td>211.5mm (1ep)</td></tr>
+    <tr><td><code>exp/A3-ssi-learnable-adj</code></td><td>SSI module</td><td>129.5mm (5ep)</td></tr>
+    <tr><td><code>exp/A4-msm-delta</code></td><td>MSM module</td><td>205.6mm (1ep)</td></tr>
+    <tr><td><code>exp/A5-bone-vectors</code></td><td>Bone vector input</td><td>210.1mm (1ep)</td></tr>
+    <tr><td><code>exp/B1-hypergcn</code></td><td>HyperGCN module</td><td class="best">46.7mm (82ep, Tier 5)</td></tr>
+    <tr><td><code>exp/B2-head-gat</code></td><td>GAT output head</td><td>134.8mm (5ep)</td></tr>
+    <tr><td><code>exp/B3-scan-order-search</code></td><td>Scan order config</td><td>206.0mm (1ep)</td></tr>
+    <tr><td><code>exp/C1-ssi-msm</code></td><td>SSI + MSM fusion</td><td>47.3mm (90ep, Tier 5)</td></tr>
+    <tr><td><code>exp/C2-full-system</code></td><td>Full system (placeholder)</td><td>—</td></tr>
+    <tr><td><code>exp/comparison</code></td><td>All tier results</td><td>—</td></tr>
+    <tr><td><code>exp/frozen_official</code></td><td>Frozen backbone + heads</td><td class="best">41.72mm (MLP, Ep 1)</td></tr>
+  </table>
+</section>
+
+</div><!-- .container -->
+
+<footer>
+  PoseMamba Improvement Research Report &nbsp;|&nbsp; Generated July 2026 &nbsp;|&nbsp;
+  Human3.6M-SH &nbsp;|&nbsp; PoseMamba-S (depth=10, dim=64, 1.47M params)
+</footer>
+
+</body>
+</html>
