@@ -23,7 +23,7 @@ torch.backends.cudnn.deterministic = True
 try:
     from .csm_triton import CrossScanTriton, CrossMergeTriton, CrossScanTriton1b1, getCSM
     from .csm_triton import CrossScanTritonF, CrossMergeTritonF, CrossScanTriton1b1F
-    from .csms6s import CrossScan, CrossMerge, CrossScan_fs_ft, CrossScan_fs_bt, CrossScan_bs_ft, CrossScan_bs_bt, CrossMerge_bs_bt, CrossMerge_bs_ft, CrossMerge_fs_bt, CrossMerge_fs_ft, CrossScan_plus_poselimbs, CrossMerge_plus_poselimbs
+    from .csms6s import CrossScan, CrossMerge, CrossScan_fs_ft, CrossScan_fs_bt, CrossScan_bs_ft, CrossScan_bs_bt, CrossMerge_bs_bt, CrossMerge_bs_ft, CrossMerge_fs_bt, CrossMerge_fs_ft, CrossScan_plus_poselimbs, CrossMerge_plus_poselimbs, CrossScan_bfs, CrossMerge_bfs
     from .csms6s import CrossScan_Ab_1direction, CrossMerge_Ab_1direction, CrossScan_Ab_2direction, CrossMerge_Ab_2direction
     from .csms6s import SelectiveScanMamba, SelectiveScanCore, SelectiveScanOflex
     from .csms6s import flops_selective_scan_fn, flops_selective_scan_ref, selective_scan_flop_jit
@@ -328,6 +328,7 @@ class BiSTSSM_v2:
             v2_bs_ft=partial(self.forward_corev2, force_fp32=(not self.disable_force32), CrossScan=CrossScan_bs_ft, SelectiveScan=SelectiveScanCore, CrossMerge=CrossMerge_bs_ft),
             v2_bs_bt=partial(self.forward_corev2, force_fp32=(not self.disable_force32), CrossScan=CrossScan_bs_bt, SelectiveScan=SelectiveScanCore, CrossMerge=CrossMerge_bs_bt),
             v2_plus_poselimbs=partial(self.forward_corev2, force_fp32=(not self.disable_force32), CrossScan=CrossScan_plus_poselimbs, SelectiveScan=SelectiveScanCore, CrossMerge=CrossMerge_plus_poselimbs),
+            v2_bfs=partial(self.forward_corev2, force_fp32=(not self.disable_force32), CrossScan=CrossScan_bfs, SelectiveScan=SelectiveScanCore, CrossMerge=CrossMerge_bfs),
             v3=partial(self.forward_corev2, force_fp32=False, SelectiveScan=SelectiveScanOflex),
             # v1=partial(self.forward_corev2, force_fp32=True, SelectiveScan=SelectiveScanOflex),
             # v4=partial(self.forward_corev2, force_fp32=False, SelectiveScan=SelectiveScanOflex, no_einsum=True, CrossScan=CrossScanTriton, CrossMerge=CrossMergeTriton),

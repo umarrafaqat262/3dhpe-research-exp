@@ -51,7 +51,7 @@ def _make_joint_to_limb(num_joints=17):
     return mat / counts
 
 class  PoseMamba(nn.Module):
-    def __init__(self, num_frame=9, num_joints=17, in_chans=2, embed_dim_ratio=256, depth=6, mlp_ratio=2., drop_rate=0., drop_path_rate=0.2,  norm_layer=None, use_ssi=False, use_msm=False, use_hypergcn=False, use_gat_head=False, forward_type='v2_plus_poselimbs'):
+    def __init__(self, num_frame=9, num_joints=17, in_chans=2, embed_dim_ratio=256, depth=6, mlp_ratio=2., drop_rate=0., drop_path_rate=0.2,  norm_layer=None, use_ssi=False, use_msm=False, use_hypergcn=False, use_gat_head=False, forward_type='v2_bfs'):
         super().__init__()
 
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)

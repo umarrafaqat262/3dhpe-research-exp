@@ -190,6 +190,56 @@ class CrossMerge_plus_poselimbs(torch.autograd.Function):
         xs[:, 2:4] = torch.flip(xs[:, 0:2], dims=[-1])
         xs = xs.view(B, 4, C, H, W)
         return xs
+# BFS scan: permute joints (W dim) to BFS kinematic order before scanning
+BFS_ORDER = [0, 1, 4, 7, 2, 5, 8, 3, 6, 9, 11, 14, 10, 12, 15, 13, 16]
+# BFS_ORDER is its own inverse: BFS_ORDER[BFS_ORDER[i]] == i for all i
+
+class CrossScan_bfs(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x: torch.Tensor):
+        B, C, H, W = x.shape
+        assert W == 17, 'the number of joints is not 17'
+        ctx.shape = (B, C, H, W)
+        # Permute joints (W dim) from index order to BFS kinematic order
+        x_perm = x[:, :, :, BFS_ORDER]
+        xs = x.new_empty((B, 4, C, H * W))
+        xs[:, 0] = x_perm.flatten(2, 3)
+        xs[:, 1] = x_perm.transpose(dim0=2, dim1=3).flatten(2, 3)
+        xs[:, 2:4] = torch.flip(xs[:, 0:2], dims=[-1])
+        return xs
+
+    @staticmethod
+    def backward(ctx, ys: torch.Tensor):
+        B, C, H, W = ctx.shape
+        L = H * W
+        ys = ys[:, 0:2] + ys[:, 2:4].flip(dims=[-1]).view(B, 2, -1, L)
+        y = ys[:, 0] + ys[:, 1].view(B, -1, W, H).transpose(dim0=2, dim1=3).contiguous().view(B, -1, L)
+        y = y.view(B, C, H, W)
+        # Inverse permute joints back to original order
+        y = y[:, :, :, BFS_ORDER]
+        return y
+
+class CrossMerge_bfs(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, ys: torch.Tensor):
+        B, K, D, H, W = ys.shape
+        ctx.shape = (H, W)
+        ys = ys.view(B, K, D, -1)
+        ys = ys[:, 0:2] + ys[:, 2:4].flip(dims=[-1]).view(B, 2, D, -1)
+        y = ys[:, 0] + ys[:, 1].view(B, -1, W, H).transpose(dim0=2, dim1=3).contiguous().view(B, D, -1)
+        return y
+
+    @staticmethod
+    def backward(ctx, x: torch.Tensor):
+        H, W = ctx.shape
+        B, C, L = x.shape
+        xs = x.new_empty((B, 4, C, L))
+        xs[:, 0] = x
+        xs[:, 1] = x.view(B, C, H, W).transpose(dim0=2, dim1=3).flatten(2, 3)
+        xs[:, 2:4] = torch.flip(xs[:, 0:2], dims=[-1])
+        xs = xs.view(B, 4, C, H, W)
+        return xs
+
 class CrossScan_bs_bt(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x: torch.Tensor):
