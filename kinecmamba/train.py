@@ -378,13 +378,21 @@ def train_with_config(args, opts):
             chk_filename = opts.evaluate if opts.evaluate else opts.resume
             log.info(f'Loading checkpoint{chk_filename}')
             checkpoint = torch.load(chk_filename, map_location=lambda storage, loc: storage, weights_only=False)
-            model_backbone.load_state_dict(checkpoint['model_pos'], strict=True)
+            missing, unexpected = model_backbone.load_state_dict(checkpoint['model_pos'], strict=False)
+            if missing:
+                log.info(f'Missing keys (ignored): {missing}')
+            if unexpected:
+                log.info(f'Unexpected keys (ignored): {unexpected}')
             model_pos = model_backbone
         else:
             chk_filename = os.path.join(opts.pretrained, opts.selection)
             log.info(f'Loading checkpoint{chk_filename}')
             checkpoint = torch.load(chk_filename, map_location=lambda storage, loc: storage, weights_only=False)
-            model_backbone.load_state_dict(checkpoint['model_pos'], strict=True)
+            missing, unexpected = model_backbone.load_state_dict(checkpoint['model_pos'], strict=False)
+            if missing:
+                log.info(f'Missing keys (ignored): {missing}')
+            if unexpected:
+                log.info(f'Unexpected keys (ignored): {unexpected}')
             model_pos = model_backbone            
     else:
         chk_filename = os.path.join(opts.checkpoint, "latest_epoch.bin")
@@ -395,9 +403,13 @@ def train_with_config(args, opts):
             log.info(f'Loading checkpoint{chk_filename}')
             checkpoint = torch.load(chk_filename, map_location=lambda storage, loc: storage, weights_only=False)
             if args.backbone == 'MotionAGFormer':
-                model_backbone.load_state_dict(checkpoint['model'], strict=True)
+                missing, unexpected = model_backbone.load_state_dict(checkpoint['model'], strict=False)
             else:
-                model_backbone.load_state_dict(checkpoint['model_pos'], strict=True)
+                missing, unexpected = model_backbone.load_state_dict(checkpoint['model_pos'], strict=False)
+            if missing:
+                log.info(f'Missing keys (ignored): {missing}')
+            if unexpected:
+                log.info(f'Unexpected keys (ignored): {unexpected}')
         model_pos = model_backbone
         
     if args.partial_train:

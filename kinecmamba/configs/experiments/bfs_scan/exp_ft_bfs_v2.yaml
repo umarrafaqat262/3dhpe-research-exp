@@ -1,0 +1,75 @@
+# Fine-tune official checkpoint with BFS scan — v2 (improved params)
+# Load official PoseMamba-S (trained with v2_plus_poselimbs), change scan to v2_bfs
+# All params unfrozen — backbone adapts to BFS ordering
+# Improved: cosine LR + warmup, gradient clipping, larger batch, lower LR, more epochs
+
+# General
+train_2d: False
+no_eval: False
+finetune: True
+partial_train: null
+
+# Training — Improved recipe
+epochs: 90
+checkpoint_frequency: 30
+batch_size: 16
+dropout: 0.0
+learning_rate: 0.00005
+weight_decay: 0.01
+lr_decay: 0.99
+accum_steps: 2
+lr_scheduler: cosine
+warmup_epochs: 5
+grad_clip_norm: 1.0
+
+# BFS scan fine-tune
+freeze_backbone: False
+checkpoint_freeze: kinecmamba/checkpoints/PoseMamba_S.bin
+
+# Model
+backbone: "PoseMamba"
+maxlen: 243
+dim_feat: 64
+mlp_ratio: 2
+depth: 10
+att_fuse: True
+input_channels: 2
+use_ssi: False
+use_msm: False
+use_hypergcn: False
+use_gat_head: False
+forward_type: v2_bfs
+
+# Data
+data_root: data/motion3d/MB3D_f243s81/
+subset_list: [H36M-SH]
+dt_file: h36m_sh_conf_cam_source_final.pkl
+clip_len: 243
+data_stride: 81
+rootrel: True
+sample_stride: 1
+num_joints: 17
+no_conf: True
+gt_2d: False
+
+# Loss
+lambda_3d_velocity: 20.0
+lambda_scale: 0.5
+lambda_lv: 0.0
+lambda_lg: 0.0
+lambda_a: 0.0
+lambda_av: 0.0
+lambda_3dw: 0.0
+lambda_3d: 1.0
+lambda_diff: 0.5
+
+# Augmentation
+synthetic: False
+flip: True
+mask_ratio: 0.
+mask_T_ratio: 0.
+noise: False
+
+# Wandb
+wandb_project: PoseMamba-bfs-scan
+wandb_entity: msds24068-itu-lahore
