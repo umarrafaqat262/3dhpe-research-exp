@@ -1,0 +1,80 @@
+# Fine-tune official checkpoint with CORRECTED BFS scan
+# Loads official PoseMamba-S (trained with v2_plus_poselimbs), swaps scan to v2_bfs.
+# Requires the two BFS scan bug fixes in lib/model/csms6s.py (INV_BFS_ORDER un-permute
+# in CrossMerge_bfs.forward + CrossScan_bfs.backward). All params unfrozen — backbone
+# adapts to the (now correctly-wired) BFS joint ordering.
+#
+# Recipe: short low-LR fine-tune from a SOTA init. Exponential LR, no warmup,
+# lambda_diff dropped (not in the reference recipe). grad_clip kept as cheap
+# insurance against the initial scan-swap loss spike.
+# NOTE: the checkpoint is loaded via CLI (-p/-ms), NOT via any yaml key
+# (freeze_backbone/checkpoint_freeze are dead keys and are intentionally omitted).
+# Do NOT change input_channels/no_conf: the official checkpoint is 2-channel, and
+# switching to 3ch would silently drop the input projection under strict=False.
+
+# General
+train_2d: False
+no_eval: False
+finetune: True
+partial_train: null
+
+# Training — short low-LR fine-tune, paper-aligned scheduler
+epochs: 40
+checkpoint_frequency: 10
+batch_size: 8
+dropout: 0.0
+learning_rate: 0.0001
+weight_decay: 0.01
+lr_decay: 0.99
+accum_steps: 2
+lr_scheduler: exponential
+warmup_epochs: 0
+grad_clip_norm: 1.0
+
+# Model
+backbone: "PoseMamba"
+maxlen: 243
+dim_feat: 64
+mlp_ratio: 2
+depth: 10
+att_fuse: True
+input_channels: 2
+use_ssi: False
+use_msm: False
+use_hypergcn: False
+use_gat_head: False
+forward_type: v2_bfs
+
+# Data
+data_root: data/motion3d/MB3D_f243s81/
+subset_list: [H36M-SH]
+dt_file: h36m_sh_conf_cam_source_final.pkl
+clip_len: 243
+data_stride: 81
+rootrel: True
+sample_stride: 1
+num_joints: 17
+no_conf: True
+gt_2d: False
+
+# Loss
+lambda_3d_velocity: 20.0
+lambda_scale: 0.5
+lambda_lv: 0.0
+lambda_lg: 0.0
+lambda_a: 0.0
+lambda_av: 0.0
+lambda_3dw: 0.0
+lambda_3d: 1.0
+lambda_diff: 0.0
+
+# Augmentation
+synthetic: False
+flip: True
+mask_ratio: 0.
+mask_T_ratio: 0.
+noise: False
+
+# Wandb
+wandb_project: PoseMamba-bfs-scan
+wandb_entity: msds24068-itu-lahore

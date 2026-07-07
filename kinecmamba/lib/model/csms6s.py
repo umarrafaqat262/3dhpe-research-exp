@@ -192,7 +192,10 @@ class CrossMerge_plus_poselimbs(torch.autograd.Function):
         return xs
 # BFS scan: permute joints (W dim) to BFS kinematic order before scanning
 BFS_ORDER = [0, 1, 4, 7, 2, 5, 8, 3, 6, 9, 11, 14, 10, 12, 15, 13, 16]
-# BFS_ORDER is its own inverse: BFS_ORDER[BFS_ORDER[i]] == i for all i
+# BFS_ORDER is NOT its own inverse (it fails at indices 10-15, the arm/head
+# joints), so the inverse permutation must be computed explicitly.
+# INV_BFS_ORDER = argsort(BFS_ORDER); INV_BFS_ORDER[BFS_ORDER[i]] == i for all i.
+INV_BFS_ORDER = [0, 1, 4, 7, 2, 5, 8, 3, 6, 9, 12, 10, 13, 15, 11, 14, 16]
 
 class CrossScan_bfs(torch.autograd.Function):
     @staticmethod
@@ -215,9 +218,11 @@ class CrossScan_bfs(torch.autograd.Function):
         ys = ys[:, 0:2] + ys[:, 2:4].flip(dims=[-1]).view(B, 2, -1, L)
         y = ys[:, 0] + ys[:, 1].view(B, -1, W, H).transpose(dim0=2, dim1=3).contiguous().view(B, -1, L)
         y = y.view(B, C, H, W)
-        # Inverse permute joints back to original order
-        y = y[:, :, :, BFS_ORDER]
-        return y
+        # Inverse-permute joints back to original order. This is the adjoint of the
+        # forward gather x_perm = x[..., BFS_ORDER], which is a gather by the TRUE
+        # inverse: grad_x[..., j] = grad_x_perm[..., INV_BFS_ORDER[j]].
+        y = y[:, :, :, INV_BFS_ORDER]
+        return y.contiguous()
 
 class CrossMerge_bfs(torch.autograd.Function):
     @staticmethod
@@ -227,12 +232,20 @@ class CrossMerge_bfs(torch.autograd.Function):
         ys = ys.view(B, K, D, -1)
         ys = ys[:, 0:2] + ys[:, 2:4].flip(dims=[-1]).view(B, 2, D, -1)
         y = ys[:, 0] + ys[:, 1].view(B, -1, W, H).transpose(dim0=2, dim1=3).contiguous().view(B, D, -1)
+        # The SSM output is still in BFS scan order along joints (CrossScan_bfs
+        # gathered by BFS_ORDER and nothing has undone it). Un-permute back to
+        # natural joint order so the downstream residual add / Spatial_pos_embed
+        # align: y_natural[..., j] = y_scan[..., INV_BFS_ORDER[j]].
+        y = y.view(B, D, H, W)[:, :, :, INV_BFS_ORDER].contiguous().view(B, D, -1)
         return y
 
     @staticmethod
     def backward(ctx, x: torch.Tensor):
         H, W = ctx.shape
         B, C, L = x.shape
+        # Adjoint of the forward un-permute (a gather by INV_BFS_ORDER): re-permute
+        # the incoming grad with BFS_ORDER before the 4-direction expansion.
+        x = x.view(B, C, H, W)[:, :, :, BFS_ORDER].contiguous().view(B, C, L)
         xs = x.new_empty((B, 4, C, L))
         xs[:, 0] = x
         xs[:, 1] = x.view(B, C, H, W).transpose(dim0=2, dim1=3).flatten(2, 3)
