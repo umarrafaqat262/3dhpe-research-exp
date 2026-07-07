@@ -21,15 +21,23 @@ partial_train: null
 # Training — short low-LR fine-tune, paper-aligned scheduler
 epochs: 40
 checkpoint_frequency: 10
-batch_size: 32          # matches the paper's training batch (MotionBERT/PoseMamba)
+# Effective batch = batch_size * accum_steps = 8 * 4 = 32 (the paper's training batch).
+# Gradient accumulation reaches batch 32 on a single GPU without OOM at 243 frames.
+# train.py:278-285 divides the loss by accum_steps and steps the optimizer every
+# accum_steps micro-batches, so this is mathematically equivalent to true batch 32.
+# If you have the VRAM, batch_size:32 + accum_steps:1 trains faster; if 8 still OOMs,
+# drop to batch_size:4 + accum_steps:8 (same effective 32).
+batch_size: 8
+accum_steps: 4
 dropout: 0.0
-learning_rate: 0.0001
+learning_rate: 0.0002   # linear-scaled for effective batch 32 (2x the 1e-4 used at
+                        # effective 16). If epoch-1 eval spikes far above 41.8mm after
+                        # the scan swap, drop to 1e-4.
 weight_decay: 0.01
 lr_decay: 0.99
-accum_steps: 1          # true batch 32 (no accumulation). If it OOMs on one GPU,
-                        # use batch_size:8 + accum_steps:4 for the same effective 32.
 lr_scheduler: exponential
-warmup_epochs: 0
+warmup_epochs: 0        # NOTE: warmup is only honored by the cosine scheduler
+                        # (train.py:466-471); it is a no-op under exponential.
 grad_clip_norm: 1.0
 
 # Model
