@@ -21,12 +21,13 @@ partial_train: null
 # Training — short low-LR fine-tune, paper-aligned scheduler
 epochs: 40
 checkpoint_frequency: 10
-batch_size: 8
+batch_size: 32          # matches the paper's training batch (MotionBERT/PoseMamba)
 dropout: 0.0
 learning_rate: 0.0001
 weight_decay: 0.01
 lr_decay: 0.99
-accum_steps: 2
+accum_steps: 1          # true batch 32 (no accumulation). If it OOMs on one GPU,
+                        # use batch_size:8 + accum_steps:4 for the same effective 32.
 lr_scheduler: exponential
 warmup_epochs: 0
 grad_clip_norm: 1.0
