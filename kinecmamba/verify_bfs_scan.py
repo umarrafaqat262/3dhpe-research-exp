@@ -5,12 +5,13 @@ Confirms the two bug fixes in lib/model/csms6s.py:
   - round-trip CrossMerge_bfs(CrossScan_bfs(x)) == 4*x (joints restored to natural order).
   - torch.autograd.gradcheck passes for both hand-written autograd.Functions.
 
-Run from repo root:  python kinecmamba/verify_bfs_scan.py
-This is a throwaway check — not intended to be committed.
+Run from INSIDE the kinecmamba/ directory (same cwd as train.py):
+  cd kinecmamba
+  python verify_bfs_scan.py
 """
 import os, sys, torch
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from kinecmamba.lib.model.csms6s import (
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # kinecmamba/ on path
+from lib.model.csms6s import (
     CrossScan_bfs, CrossMerge_bfs, BFS_ORDER, INV_BFS_ORDER,
 )
 
