@@ -1,0 +1,78 @@
+# NATIVE PoseMamba scan — TRAIN FROM SCRATCH (control for the BFS comparison)
+#
+# This is the mandatory baseline for any "BFS beats PoseMamba" claim. It is
+# IDENTICAL to exp_bfs_scratch.yaml except forward_type = v2_plus_poselimbs
+# (the scan the official PoseMamba-S was trained with). Same recipe, same seed,
+# same pipeline -> the only fair head-to-head.
+#
+# Double duty: (1) validates that the from-scratch paper recipe reproduces ~41.8mm
+# in THIS pipeline (recipe sanity), and (2) provides the true baseline to compare
+# BFS against. Do NOT compare BFS to the paper's 41.8 or the frozen-backbone 41.7 --
+# neither is a from-scratch control.
+
+# General
+train_2d: False
+no_eval: False
+finetune: False
+partial_train: null
+
+# Training — paper recipe (identical to exp_bfs_scratch.yaml)
+epochs: 120
+checkpoint_frequency: 20
+batch_size: 8
+accum_steps: 4           # effective batch 32
+dropout: 0.0
+learning_rate: 0.0005
+weight_decay: 0.01
+lr_decay: 0.99
+lr_scheduler: exponential
+warmup_epochs: 0
+grad_clip_norm: 0
+
+# Model
+backbone: "PoseMamba"
+maxlen: 243
+dim_feat: 64
+mlp_ratio: 2
+depth: 10
+att_fuse: True
+input_channels: 3
+use_ssi: False
+use_msm: False
+use_hypergcn: False
+use_gat_head: False
+forward_type: v2_plus_poselimbs   # <-- the ONLY difference from exp_bfs_scratch.yaml
+
+# Data
+data_root: data/motion3d/MB3D_f243s81/
+subset_list: [H36M-SH]
+dt_file: h36m_sh_conf_cam_source_final.pkl
+clip_len: 243
+data_stride: 81
+rootrel: True
+sample_stride: 1
+num_joints: 17
+no_conf: False
+gt_2d: False
+
+# Loss (reference recipe)
+lambda_3d_velocity: 20.0
+lambda_scale: 0.5
+lambda_lv: 0.0
+lambda_lg: 0.0
+lambda_a: 0.0
+lambda_av: 0.0
+lambda_3dw: 0.0
+lambda_3d: 1.0
+lambda_diff: 0.0
+
+# Augmentation
+synthetic: False
+flip: True
+mask_ratio: 0.
+mask_T_ratio: 0.
+noise: False
+
+# Wandb
+wandb_project: PoseMamba-bfs-scan
+wandb_entity: msds24068-itu-lahore
