@@ -12,12 +12,13 @@ class Augmenter2D(object):
         Make 2D augmentations on the fly. PyTorch batch-processing GPU version.
     """
     def __init__(self, args):
-        self.d2c_params = read_pkl(args.d2c_params_path)
-        self.noise = torch.load(args.noise_path)
+        self.args = args
         self.mask_ratio = args.mask_ratio
         self.mask_T_ratio = args.mask_T_ratio
         self.num_Kframes = 27
         self.noise_std = 0.002
+        self._d2c_params = None
+        self._noise = None
 
     def dis2conf(self, dis, a, b, m, s):
         f = a/(dis+a)+b*dis
@@ -27,18 +28,22 @@ class Augmenter2D(object):
         return f + shift
     
     def add_noise(self, motion_2d):
-        a, b, m, s = self.d2c_params["a"], self.d2c_params["b"], self.d2c_params["m"], self.d2c_params["s"]
-        if "uniform_range" in self.noise.keys():
-            uniform_range = self.noise["uniform_range"]
+        if self._d2c_params is None:
+            self._d2c_params = read_pkl(self.args.d2c_params_path)
+        if self._noise is None:
+            self._noise = torch.load(self.args.noise_path)
+        a, b, m, s = self._d2c_params["a"], self._d2c_params["b"], self._d2c_params["m"], self._d2c_params["s"]
+        if "uniform_range" in self._noise.keys():
+            uniform_range = self._noise["uniform_range"]
         else:
             uniform_range = 0.06
         motion_2d = motion_2d[:,:,:,:2]
         batch_size = motion_2d.shape[0]
         num_frames = motion_2d.shape[1]
         num_joints = motion_2d.shape[2]
-        mean = self.noise['mean'].float()
-        std = self.noise['std'].float()
-        weight = self.noise['weight'][:,None].float()
+        mean = self._noise['mean'].float()
+        std = self._noise['std'].float()
+        weight = self._noise['weight'][:,None].float()
         sel = torch.rand((batch_size, self.num_Kframes, num_joints, 1))
         gaussian_sample = (torch.randn(batch_size, self.num_Kframes, num_joints, 2) * std + mean) 
         uniform_sample = (torch.rand((batch_size, self.num_Kframes, num_joints, 2))-0.5) * uniform_range
