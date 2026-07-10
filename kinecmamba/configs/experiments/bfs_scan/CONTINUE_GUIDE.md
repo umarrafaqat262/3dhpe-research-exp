@@ -67,3 +67,51 @@ That P1 is the number to report. Nothing else.
 Return the best epoch, its P1 and P2 verbatim from the eval log, and the path to
 `best_epoch.bin`. Do not compare a GT-2D number against the detected-2D 41.8 as if
 it beat it; this run uses detected 2D (`gt_2d: False`).
+
+---
+
+# Bone-loss + EMA variant (`exp_bfs_boneloss.yaml`)
+
+Goal: beat PoseMamba-S (41.8mm) by continuing from the BFS checkpoint and adding two
+anatomy-aware bone losses on top of the EMA polish. Same start point and rules as above
+(detected 2D, S1/S5/S6/S7/S8 train, S9/S11 test, Augmenter2D off).
+
+## Why bone loss fits BFS
+The BFS scan orders joints along the kinematic tree; the bone losses supervise the
+lengths and temporal rigidity of that same tree's 16 edges. `lib/model/loss.py`
+`get_limb_lens` uses the exact H36M 17-joint bone list
+(`[0,1][1,2][2,3] [0,4][4,5][5,6] [0,7][7,8][8,9][9,10] [8,11][11,12][12,13] [8,14][14,15][15,16]`),
+so the loss is a correct bone-length implementation and is kinematically aligned with
+the scan. No code change is needed; the terms are already wired in `train.py`.
+
+## What this config changes vs `exp_bfs_continue.yaml`
+- `lambda_lg: 0.5`  — bone-length L1 vs GT (`loss_limb_gt`).
+- `lambda_lv: 1.0`  — bone-length temporal variance (`loss_limb_var`); small magnitude, so weighted above `lg`.
+- `lambda_diff: 0.5`  — restores the temporal-smoothness term the from-scratch run dropped.
+- `epochs: 25`, `learning_rate: 5e-5` (cosine → 0). EMA stays on (`use_ema: True`, `ema_decay: 0.999`).
+- Everything else (model, data, `forward_type: v2_bfs`, 3-channel input) is identical, so the BFS checkpoint loads cleanly.
+
+## Run
+```bash
+cd kinecmamba
+# 1) sanity: checkpoint loads + reproduces ~43mm through this config
+python train.py --config configs/experiments/bfs_scan/exp_bfs_boneloss.yaml \
+  -e checkpoints/bfs_scratch_120/best_epoch.bin --wandb false
+# 2) train (finetune path; NOT -r/--resume)
+python train.py --config configs/experiments/bfs_scan/exp_bfs_boneloss.yaml \
+  -p checkpoints/bfs_scratch_120 -ms best_epoch.bin \
+  -c checkpoint/bfs_boneloss --wandb false
+# 3) evaluate best and record P1/P2 verbatim
+python train.py --config configs/experiments/bfs_scan/exp_bfs_boneloss.yaml \
+  -e checkpoint/bfs_boneloss_<timestamp>/best_epoch.bin --wandb false
+```
+Startup log should show the checkpoint loaded (`strict=False`, few missing keys),
+`EMA enabled, decay 0.999`, and epoch-0 eval ≈ 43mm. Confirm the per-epoch loss line
+shows non-zero `loss_lg` / `loss_lv` so the bone terms are active.
+
+## Report back
+Best epoch + its P1/P2 verbatim, and the gain vs the 43mm BFS-only start (the bone-loss
+ablation). Success = best P1 < 41.8. If it stalls ≥ 42, next steps are: raise the bone
+weights (`lambda_lg: 1.0`, `lambda_lv: 2.0`), enable 2D augmentation (needs Augmenter2D
+assets), or extend the anneal to 40–60 epochs. Thesis "Ours" numbers stay TBD until a
+final measured P1 is chosen.
