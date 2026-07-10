@@ -1,0 +1,100 @@
+\setlength{\footskip}{8mm}
+
+\chapter{Conclusion and Recommendations}
+\label{ch:conclusion}
+
+\section{Conclusion}
+\label{sec:conclusion-conclusion}
+
+This thesis addressed a specific gap identified in
+Chapter~\ref{ch:literature-review}: existing Transformer-based methods
+for monocular 3D human pose estimation scale quadratically with sequence
+length, and existing state-space-based alternatives, while linear in
+sequence length, order the skeleton's joints either by an anatomically
+arbitrary fixed index or by a learned scan grouping, rather than by the
+skeleton's own kinematic structure (Section~\ref{sec:lit-summary-gap}).
+
+Chapter~\ref{ch:methodology} presented a dual-stack, Mamba-based
+architecture for this task, built around a four-directional cross-scan
+selective state space layer (Section~\ref{sec:method-bistssm}), and
+introduced this thesis's central contribution: a breadth-first search
+kinematic-tree scan order (Section~\ref{sec:method-bfs}) that replaces
+the naive joint-index order with a deterministic traversal derived
+directly from the skeleton's parent-child hierarchy, adding no learned
+parameters. Chapter~\ref{ch:results} set out the evaluation of this
+architecture on Human3.6M at approximately 1.26M parameters, which places
+the proposed method in the same efficiency tier as the smallest baselines
+compared against, namely PoseMamba-S, SasMamba, and GLA-GCN. Its accuracy
+on the benchmark depends on a from-scratch training run that had not
+finished when this chapter was written, so the P1 and P2 figures are
+reported as pending rather than final. PoseMamba-S, the closest baseline
+in both architecture and parameter budget, is the reference point for that
+comparison once it completes.
+
+Whether the final numbers will support the thesis's motivating
+hypothesis, that a scan order derived from the skeleton's kinematic tree
+can improve a state-space-based pose estimator without increasing model
+capacity, remains to be confirmed. As discussed in
+Section~\ref{sec:results-ablation}, a comparison on Human3.6M alone would
+in any case not isolate the BFS scan order as the specific cause of any
+difference from other differences in training configuration. The
+scan-order ablation designed to make that attribution directly, and the
+MPI-INF-3DHP evaluation committed to in
+Section~\ref{sec:intro-objectives}, were still running when this chapter
+was written
+(Sections~\ref{sec:results-mpiinf3dhp}~and~\ref{sec:results-ablation}).
+Any conclusion that the BFS kinematic-tree scan order specifically, rather
+than the architecture or training configuration as a whole, drives the
+model's accuracy should therefore be treated as provisional pending those
+results.
+
+\section{Recommendations}
+\label{sec:conclusion-recommendations}
+
+The following work is recommended to complete and extend this thesis:
+
+\begin{enumerate}
+  \item \textbf{Complete the pending evaluations.} The scan-order
+    ablation study (Section~\ref{sec:results-ablation}) and the
+    MPI-INF-3DHP evaluation (Section~\ref{sec:results-mpiinf3dhp}) should
+    be finished and reported, and the training hyperparameters and
+    hardware configuration omitted from Section~\ref{sec:results-implementation}
+    should be finalized and documented, so that the results in this
+    thesis are fully reproducible.
+
+  \item \textbf{Extend the ablation beyond a single model size.} Because
+    the Human3.6M comparison in Section~\ref{sec:results-h36m} is
+    conducted at a single, small parameter budget, it remains untested
+    whether the benefit of the BFS kinematic-tree scan persists, grows, or
+    diminishes at larger model capacities such as those of PoseMamba-L or
+    MotionAGFormer-L.
+
+  \item \textbf{Explore hybrid fixed/learned scan orders.} The BFS scan
+    order is entirely fixed and parameter-free
+    (Section~\ref{sec:method-bfs}), while methods such as
+    \cite{nguyen2025skeletonmamba} learn scan groupings from data. A
+    natural extension is a hybrid approach that initializes a learned scan
+    from the BFS kinematic-tree order rather than from a random or
+    index-based starting point, potentially combining the interpretability
+    of a kinematically-grounded order with the flexibility of a learned
+    one.
+
+  \item \textbf{Test generalization beyond the evaluated scope.} As noted
+    in Section~\ref{sec:intro-limitations}, this thesis is restricted to
+    single-person, monocular, fixed-topology input. Extending the BFS
+    kinematic-tree scan to multi-person scenes, to skeletal topologies
+    other than the Human3.6M 17-joint format (e.g.\ hand or face
+    keypoints), or to in-the-wild video without ground-truth 3D annotation
+    would test how specific the method's benefit is to the evaluated
+    setting.
+
+  \item \textbf{Report qualitative and per-action results.} Aggregate
+    MPJPE and P-MPJPE (Section~\ref{sec:results-h36m}) do not indicate
+    which actions or motion types benefit most from the proposed scan
+    order. A per-action breakdown and qualitative visualization of
+    predicted versus ground-truth motion sequences would clarify where the
+    architectural contribution of this thesis helps most.
+\end{enumerate}
+
+\FloatBarrier
+

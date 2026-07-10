@@ -1,0 +1,289 @@
+\setlength{\footskip}{8mm}
+
+\chapter{Introduction}
+\label{ch:introduction}
+
+\section{Overview}
+\label{sec:intro-overview}
+
+Human pose estimation from monocular video supports a wide range of
+applications, including motion capture for animation, human-computer
+interaction, sports performance analysis, surveillance, and autonomous
+driving \cite{guo2025survey3dhpe}. Among the various formulations of this
+problem, monocular 3D human pose estimation (HPE), which recovers the
+three-dimensional coordinates of human body joints from a single-camera
+video sequence, remains particularly challenging, since a single 2D
+projection is inherently ambiguous with respect to depth. The dominant
+paradigm decomposes the task into two stages: a 2D pose detector localizes
+keypoints on the image plane, after which a 2D-to-3D lifting network infers
+the corresponding 3D joint positions from the resulting 2D keypoint
+sequence \cite{pavllo2019videopose3d}. Depth ambiguity and self-occlusion
+make this second stage, lifting, the central technical difficulty the
+field has focused on for the past decade.
+
+Early lifting approaches relied on convolutional architectures.
+Representative work such as HRNet \cite{sun2019hrnet} demonstrated that
+maintaining high-resolution feature representations throughout the network
+improves keypoint localization accuracy, but convolutional
+receptive fields remain inherently local, limiting these models' ability
+to reason jointly across distant body parts and across long temporal
+windows. The introduction of the Transformer architecture
+\cite{vaswani2017attention} and its extension to vision
+\cite{dosovitskiy2020vit} offered a remedy: self-attention allows every
+joint, at every frame, to directly attend to every other joint and frame.
+PoseFormer \cite{zheng2021poseformer} was the first to apply spatial and
+temporal self-attention to 3D HPE, and subsequent work refined this idea
+along several axes. MHFormer \cite{li2022mhformer} models multiple
+plausible pose hypotheses to resolve depth ambiguity, MixSTE
+\cite{zhang2022mixste} alternates spatial and temporal transformer blocks
+in a sequence-to-sequence formulation, PoseFormerV2
+\cite{zhao2023poseformerv2} exploits the frequency domain to reduce
+sequence length, STCFormer \cite{tang2023stcformer} models spatial and
+temporal correlations jointly through criss-cross attention, and
+MotionBERT \cite{zhu2023motionbert} and MotionAGFormer
+\cite{mehraban2024motionagformer} pursue unified motion representations
+and hybrid Transformer-GCN designs, respectively. However, the
+self-attention mechanism these methods rely on incurs quadratic
+computational and memory complexity in sequence length, and processes
+spatio-temporal correlations in a manner that does not naturally
+distinguish the directionality or hierarchy inherent to human skeletal
+structure. As the field pushes toward longer input sequences for more
+temporally consistent predictions, this quadratic cost becomes an
+increasingly severe practical bottleneck.
+
+The open question is whether a sequence model can capture the same
+long-range spatio-temporal dependencies that make Transformers effective
+for 3D HPE while scaling linearly rather than quadratically with sequence
+length. Structured state space models (SSMs) have recently emerged as a
+candidate answer. The S4 model \cite{gu2021s4} demonstrated that a
+structured, continuous-time state space formulation can model long
+sequences efficiently, and Mamba \cite{gu2023mamba} extended this line of
+work with input-dependent (selective) parameterization and a
+hardware-aware scan algorithm, achieving Transformer-competitive quality
+with linear-time complexity. This efficiency prompted rapid adoption in
+vision: Vision Mamba \cite{zhu2024visionmamba} and VMamba
+\cite{liu2024vmamba} adapted the originally causal, unidirectional SSM
+formulation to non-causal 2D visual data through bidirectional and
+multi-directional scanning strategies, and SSMs have since been applied to
+human motion and pose estimation directly
+\cite{mondal2024hummuss, zhang2024posemagic, nguyen2025skeletonmamba,
+zheng2025mambatopology, lu2025structureawaremamba, feng2025highresssm,
+cui2025sasmamba, wang2025dbmambapose}.
+
+Across this emerging body of work, a plain unidirectional SSM applied
+naively to skeletal data tends to underperform, and some form of
+bidirectional processing or custom scan ordering is needed to compensate
+for the fact that an SSM processes its input as a
+strict 1D sequence, whereas a human skeleton is not linear but a
+hierarchical, tree-structured graph of joints connected by bones
+\cite{yan2018stgcn, loper2015smpl}. Existing remedies to this mismatch are
+largely heuristic or learned: some methods reorder joints according to an
+ad hoc geometric heuristic, while others, such as the Group Scan and Joint
+Scan strategies explored in \cite{nguyen2025skeletonmamba}, learn scan
+groupings directly from data. Yet the general finding that a principled,
+deterministic node ordering can markedly improve sequential modeling of
+graph-structured data is well established outside the pose estimation
+literature. Breadth-first search (BFS) ordering, for instance, has been
+shown to make auto-regressive sequence models over graphs both more
+scalable and more effective by exposing local graph structure to the
+sequence model in a consistent, canonical way \cite{you2018graphrnn}. This
+suggests that the skeleton's own kinematic tree, rather than a learned or
+arbitrary heuristic, may offer a more principled scan order for SSM-based
+pose estimation.
+
+In this thesis, we investigate this direction directly. We adopt a
+bidirectional spatio-temporal state space architecture for monocular 3D
+human pose estimation, and introduce a breadth-first search (BFS)
+kinematic-tree scan as an architectural refinement to the spatial scan
+order: joints are traversed outward from a root joint (the pelvis)
+following the parent-child hierarchy defined by the body's kinematic tree
+\cite{loper2015smpl}, layer by layer, before being flattened into the 1D
+sequence consumed by the state space model. This is motivated by the
+hypothesis that a scan order derived directly from skeletal anatomy,
+rather than from a fixed joint index or a learned grouping, better
+preserves local joint adjacency for the SSM's local modeling capacity
+while remaining simple, deterministic, and free of additional learned
+parameters. We evaluate this approach on the standard Human3.6M
+\cite{ionescu2014human36m} and MPI-INF-3DHP \cite{mehta2017mpiinf3dhp}
+benchmarks against established Transformer-, GCN-, and SSM-based
+baselines.
+
+\section{Problem Statement}
+\label{sec:intro-problem-statement}
+
+The literature reviewed in Section~\ref{sec:intro-overview}
+reveals two distinct, compounding problems that motivate the architecture
+developed in this thesis.
+
+\textbf{Problem 1: the computational cost of attention-based
+spatio-temporal modeling.} Transformer-based 3D HPE methods
+\cite{zheng2021poseformer, li2022mhformer, zhang2022mixste,
+zhao2023poseformerv2, tang2023stcformer, zhu2023motionbert,
+mehraban2024motionagformer} rely on self-attention to model relationships
+across joints and frames, but self-attention's computational and memory
+cost scales quadratically with input sequence length. Since prediction
+accuracy in 3D HPE benefits from longer temporal context (more frames
+give the model more evidence to disambiguate depth and resolve occlusion),
+this quadratic scaling directly limits how much temporal context these
+models can practically exploit, and forces a trade-off between temporal
+receptive field and computational budget that becomes increasingly costly
+as sequence length grows.
+
+\textbf{Problem 2: a mismatch between sequential state space modeling and
+the skeleton's non-sequential structure.} State space models such as
+Mamba \cite{gu2023mamba} process input as a strict one-dimensional
+sequence, and were originally formulated for inherently sequential or
+unidirectional data. A human skeleton, however, is not a sequence but a
+hierarchical, tree-structured graph of joints connected by rigid bones
+\cite{loper2015smpl}, with no canonical linear order. Flattening this
+graph into a 1D sequence therefore requires an explicit choice of scan
+order, and this choice determines which joints appear adjacent to one
+another in the sequence the SSM processes, which directly affects the
+model's ability to capture local joint dependencies. Existing approaches
+to this problem are unsatisfying in one of two ways: they either impose a
+fixed but anatomically arbitrary order (e.g., dataset joint-index order,
+or a hand-designed geometric heuristic), or they learn a scan grouping
+from data, such as the Group Scan and Joint Scan strategies in
+\cite{nguyen2025skeletonmamba}, at the cost of additional learned
+parameters and reduced interpretability. Neither approach derives the scan
+order directly and deterministically from the skeleton's own kinematic
+hierarchy, despite evidence from outside the pose estimation literature
+that principled graph-node orderings, such as breadth-first search, can
+markedly improve sequential models over graph-structured data
+\cite{you2018graphrnn}.
+
+These two problems together define the central question this
+thesis addresses: \textbf{how can a sequence model be designed that
+retains the linear-time efficiency of state space models while processing
+the human skeleton in a manner that respects its underlying kinematic
+structure, rather than an arbitrary or learned joint ordering?} The
+remainder of this thesis develops and evaluates an architecture that
+answers this question through a bidirectional spatio-temporal state space
+backbone combined with a deterministic, breadth-first search
+kinematic-tree scan order.
+
+\section{Objectives}
+\label{sec:intro-objectives}
+
+Guided by the problem statement in Section~\ref{sec:intro-problem-statement},
+the objectives of this thesis are as follows:
+
+\begin{enumerate}
+  \item \textbf{To design a bidirectional spatio-temporal state space
+    architecture for monocular 3D human pose estimation} that models both
+    intra-frame joint relationships and inter-frame temporal correlations
+    while retaining the linear-time computational complexity of state
+    space models \cite{gu2023mamba, gu2021s4}, avoiding the quadratic
+    scaling of self-attention-based approaches \cite{zheng2021poseformer,
+    zhang2022mixste, zhu2023motionbert}.
+
+  \item \textbf{To introduce a breadth-first search (BFS) kinematic-tree
+    scan order} as the spatial scan strategy for this architecture,
+    traversing the skeleton's joints outward from a root joint according
+    to the parent-child hierarchy defined by the body's kinematic tree
+    \cite{loper2015smpl}, as a deterministic, anatomically-grounded
+    alternative to the fixed-index and learned scan orders used in prior
+    SSM-based pose estimation work \cite{nguyen2025skeletonmamba},
+    motivated by evidence that BFS node orderings improve sequential
+    modeling of graph-structured data \cite{you2018graphrnn}.
+
+  \item \textbf{To empirically evaluate the proposed architecture} on the
+    standard Human3.6M \cite{ionescu2014human36m} and MPI-INF-3DHP
+    \cite{mehta2017mpiinf3dhp} benchmarks, comparing accuracy (MPJPE) and
+    computational efficiency (parameter count, MACs) against
+    representative Transformer-based \cite{zhang2022mixste,
+    zhu2023motionbert, mehraban2024motionagformer}, graph-based
+    \cite{yu2023glagcn}, and state-space-based \cite{zhang2024posemagic,
+    cui2025sasmamba, wang2025dbmambapose} baselines.
+
+  \item \textbf{To isolate and quantify the specific contribution of the
+    BFS kinematic-tree scan} through ablation studies comparing it against
+    alternative scan orders (e.g., fixed joint-index order, learned
+    group/joint scan strategies), in order to determine whether any
+    performance difference is attributable to the scan order itself rather
+    than to the underlying SSM backbone alone.
+\end{enumerate}
+
+\section{Limitations and Scope}
+\label{sec:intro-limitations}
+
+This thesis focuses specifically on the 2D-to-3D lifting stage of the
+monocular 3D human pose estimation pipeline. Several boundaries define the
+scope of this work:
+
+\begin{itemize}
+  \item \textbf{Single-person, monocular RGB input.} The proposed
+    architecture is designed and evaluated for single-person 3D pose
+    estimation from a single RGB camera viewpoint. Multi-person scenarios,
+    multi-view fusion, and depth-sensor or inertial-sensor inputs fall
+    outside the scope of this thesis.
+
+  \item \textbf{2D keypoint input assumed.} Consistent with the standard
+    2D-to-3D lifting formulation \cite{pavllo2019videopose3d}, this thesis
+    assumes 2D keypoints are available as input, either from ground-truth
+    annotations or an off-the-shelf 2D pose detector \cite{sun2019hrnet}.
+    Improving 2D keypoint detection accuracy itself is not an objective of
+    this work; errors introduced at the 2D detection stage are treated as
+    an external input condition rather than a problem this architecture
+    addresses.
+
+  \item \textbf{Evaluation limited to standard benchmark datasets.} The
+    proposed method is evaluated on Human3.6M \cite{ionescu2014human36m}
+    and MPI-INF-3DHP \cite{mehta2017mpiinf3dhp}, both of which are
+    captured under controlled or semi-controlled conditions. Performance
+    on fully unconstrained in-the-wild video, where ground-truth 3D
+    annotations are unavailable for direct quantitative evaluation, is not
+    assessed.
+
+  \item \textbf{Fixed, known skeletal topology.} The breadth-first search
+    kinematic-tree scan relies on a fixed, predefined parent-child joint
+    hierarchy \cite{loper2015smpl} consistent with the skeletal
+    definitions used by the evaluation datasets. This thesis does not
+    address generalization to non-standard skeletal topologies (e.g.,
+    pathological anatomy, partial-body input, or rigs with a different
+    joint count/hierarchy) that would require re-deriving the traversal
+    order.
+
+  \item \textbf{Efficiency measured, not deployed.} Computational
+    efficiency is assessed in terms of parameter count and
+    multiply-accumulate operations (MACs), consistent with prior work
+    \cite{zhang2024posemagic, cui2025sasmamba}. This thesis does not
+    include on-device deployment, latency benchmarking on embedded or
+    mobile hardware, or real-time system integration.
+
+  \item \textbf{Architectural scope.} The contribution of this thesis is
+    confined to the sequence backbone and spatial scan order of the
+    lifting network. Improvements to loss functions, data augmentation
+    strategies, temporal post-processing/smoothing, or multi-hypothesis
+    modeling \cite{li2022mhformer} are outside the scope of this work,
+    except where a standard, established choice is adopted without
+    modification to support the core architectural comparison.
+\end{itemize}
+
+\section{Thesis Outline}
+\label{sec:intro-outline}
+
+The remainder of this thesis is organized as follows.
+
+Chapter~\ref{ch:literature-review} reviews the literature relevant to this
+work, tracing the evolution of monocular 3D human pose estimation from
+convolutional and graph-based methods, through Transformer-based
+architectures, to the recent emergence of state space models, and
+situates the kinematic-tree scan order proposed in this thesis within that
+context.
+
+Chapter~\ref{ch:methodology} presents the proposed architecture in detail,
+including the bidirectional spatio-temporal state space backbone and the
+breadth-first search kinematic-tree scan.
+
+Chapter~\ref{ch:results} reports the experimental setup and benchmark
+results on Human3.6M and MPI-INF-3DHP, comparisons against Transformer-,
+graph-, and state-space-based baselines, and ablation studies isolating
+the effect of the proposed scan order.
+
+Finally, Chapter~\ref{ch:conclusion} summarizes the contributions of this
+thesis, discusses its limitations, and outlines directions for future
+work.
+
+\FloatBarrier
+

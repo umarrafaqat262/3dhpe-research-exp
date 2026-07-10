@@ -1,0 +1,210 @@
+\setlength{\footskip}{8mm}
+
+\chapter{Experimental Results}
+\label{ch:results}
+
+\section{Overview}
+\label{sec:results-overview}
+
+Chapter~\ref{ch:methodology} presented a dual-stack, Mamba-based
+architecture for monocular 3D human pose estimation, centered on a
+breadth-first search (BFS) kinematic-tree scan order
+(Section~\ref{sec:method-bfs}) intended to close the research gap
+identified in Section~\ref{sec:lit-summary-gap}. This chapter reports the
+empirical evaluation of that architecture.
+
+Section~\ref{sec:results-protocol} describes the benchmark datasets and
+the evaluation metrics used throughout this chapter.
+Section~\ref{sec:results-implementation} summarizes the implementation
+configuration. Section~\ref{sec:results-h36m} sets out the main comparison
+of this thesis, placing the proposed method against established baselines
+on Human3.6M that span the Transformer, graph, and state-space families.
+Section~\ref{sec:results-mpiinf3dhp} and Section~\ref{sec:results-ablation}
+cover the MPI-INF-3DHP benchmark and the scan-order ablation study
+motivated in Section~\ref{sec:intro-objectives}. The from-scratch training
+runs behind all three evaluations are still completing, so the accuracy of
+the proposed method is reported here as pending rather than final. The
+baseline figures and the evaluation protocol, which do not depend on those
+runs, are given in full. Section~\ref{sec:results-summary} closes the
+chapter.
+
+\section{Datasets and Evaluation Protocol}
+\label{sec:results-protocol}
+
+\textbf{Human3.6M} \cite{ionescu2014human36m} is the primary benchmark used
+in this thesis. It consists of 3.6 million video frames of 11 professional
+actors performing 15 everyday actions, captured by four synchronized
+cameras in a controlled studio, with 3D ground-truth annotations obtained
+via a marker-based motion capture system. Following the standard protocol
+established by the baselines reviewed in Chapter~\ref{ch:literature-review}
+\cite{pavllo2019videopose3d, zheng2021poseformer, zhang2022mixste}, subjects
+S1, S5, S6, S7, and S8 are used for training and subjects S9 and S11 for
+testing. The 17-joint skeleton format used throughout is the one defined
+in Section~\ref{sec:method-problem}.
+
+\textbf{MPI-INF-3DHP} \cite{mehta2017mpiinf3dhp} is used as a secondary,
+cross-dataset benchmark. It includes a greater diversity of actions,
+subjects, and both indoor and outdoor recording conditions than
+Human3.6M, and is commonly used to assess how well a model generalizes
+beyond a single controlled capture setup.
+
+\textbf{Evaluation metrics.} Two standard metrics are used, both computed
+on the root-relative 3D pose representation defined in
+Section~\ref{sec:method-problem}. The first, Protocol~1 (P1), is the mean
+per-joint position error (MPJPE) already defined as the primary training
+loss term in Section~\ref{sec:method-loss},
+\begin{equation}
+\text{MPJPE} = \frac{1}{TJ} \sum_{t,j} \big\lVert \hat{Y}_{t,j} - Y_{t,j} \big\rVert_2 ,
+\end{equation}
+averaged here over the test set rather than a training batch. The second,
+Protocol~2 (P-MPJPE), first applies a per-frame rigid Procrustes alignment
+(denoted $\mathrm{Proc}(\cdot)$: a least-squares optimal rotation,
+translation, and scale, unlike the scale-only correction used by the
+training-time $\mathcal{L}_{3d\text{-}scale}$ term in
+Section~\ref{sec:method-loss}) between the predicted and ground-truth
+pose before computing MPJPE:
+\begin{equation}
+\text{P-MPJPE} = \frac{1}{TJ} \sum_{t,j} \big\lVert \mathrm{Proc}(\hat{Y}_{t}, Y_{t})_{j} - Y_{t,j} \big\rVert_2 .
+\end{equation}
+Both metrics are reported in millimeters. Unless otherwise noted, all P1
+and P2 figures in this chapter, for the proposed method and for every
+baseline alike, correspond to the ``detected 2D'' input setting, in which 2D
+keypoints are obtained from an off-the-shelf 2D pose detector rather than
+ground-truth annotations, consistent with the standard evaluation
+convention in the literature reviewed in Chapter~\ref{ch:literature-review}.
+
+\section{Implementation Details}
+\label{sec:results-implementation}
+
+The evaluated model follows exactly the architecture and training
+objective specified in Chapter~\ref{ch:methodology}: an input window of
+$T=243$ frames over $J=17$ joints, a token width of $C=64$, 20
+BiSTSSMBlock instances (Section~\ref{sec:method-architecture}), a
+selective state space hidden dimension of $N=16$
+(Section~\ref{sec:method-bistssm}), the breadth-first search
+kinematic-tree scan order $\pi$ (Section~\ref{sec:method-bfs}), and the
+four-term loss function with $\lambda_{3d}=1.0$, $\lambda_{scale}=0.5$,
+$\lambda_{vel}=20.0$, and $\lambda_{diff}=0.5$ (Section~\ref{sec:method-loss}).
+
+\textit{The training hyperparameters (optimizer, learning rate schedule,
+batch size, number of epochs) and hardware configuration are not yet
+finalized for reporting and will be completed before submission.}
+
+\section{Comparison with the State of the Art on Human3.6M}
+\label{sec:results-h36m}
+
+Table~\ref{tab:h36m-sota} places the proposed method alongside
+representative baselines from Chapter~\ref{ch:literature-review}, using
+each baseline's officially reported P1/P2 figures under the protocol
+defined in Section~\ref{sec:results-protocol}. The accuracy of the
+proposed method depends on its from-scratch training run, which has not
+yet finished, so its P1 and P2 entries in the table are marked pending and
+will be filled in once that run completes.
+
+\begin{table}[t]
+\centering
+\caption[Comparison with the state of the art on Human3.6M.]{Comparison
+  with the state of the art on Human3.6M under the detected-2D input
+  setting. $T$: number of input frames. Params/MACs are as officially
+  reported by each method; ``n/r'' denotes a value not reported in the
+  cited source, and ``TBD'' marks the proposed method's pending result.
+  P1: MPJPE (mm). P2: P-MPJPE (mm).}
+\label{tab:h36m-sota}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{l l c c c c c}
+\hline
+Method & Venue & $T$ & Params (M) & MACs (G) & P1 $\downarrow$ & P2 $\downarrow$ \\
+\hline
+MHFormer \cite{li2022mhformer}            & CVPR'22  & 351 & 30.9 & 7.0   & 43.0  & 34.4 \\
+PoseFormerV2 \cite{zhao2023poseformerv2}  & CVPR'23  & 243 & 14.4 & 4.8   & 45.2  & 35.6 \\
+GLA-GCN \cite{yu2023glagcn}               & ICCV'23  & 243 & 1.3  & 1.5   & 44.4  & 34.8 \\
+MixSTE \cite{zhang2022mixste}             & CVPR'22  & 243 & 33.6 & 139.0 & 40.9  & 32.6 \\
+STCFormer \cite{tang2023stcformer}        & CVPR'23  & 243 & 4.7  & 19.6  & 41.0  & 32.0 \\
+MotionBERT \cite{zhu2023motionbert}       & ICCV'23  & 243 & 42.3 & 174.8 & 39.2  & 32.9 \\
+MotionAGFormer-L \cite{mehraban2024motionagformer} & WACV'24 & 243 & 19.0 & 78.3 & 38.4 & 32.5 \\
+Pose Magic \cite{zhang2024posemagic}      & 2024     & 243 & 14.4 & 40.6  & 37.5  & n/r \\
+PoseMamba-S \cite{huang2025posemamba}     & AAAI'25  & 243 & 0.9  & 3.6   & 41.8  & 35.0 \\
+PoseMamba-L \cite{huang2025posemamba}     & AAAI'25  & 243 & 6.7  & 27.9  & 38.1  & 32.5 \\
+SasMamba \cite{cui2025sasmamba}           & WACV'26  & 243 & 0.64 & 1.3   & 41.48 & 34.84 \\
+SasMamba-large \cite{cui2025sasmamba}     & WACV'26  & 243 & 4.1  & 8.56  & 39.77 & 33.61 \\
+\hline
+\textbf{Ours} & This work & 243 & \textbf{1.26} & n/r & \textbf{TBD} & \textbf{TBD} \\
+\hline
+\end{tabular}%
+}
+\end{table}
+
+At approximately 1.26M parameters, the proposed method sits in the same
+efficiency tier as the smallest baselines in Table~\ref{tab:h36m-sota},
+alongside PoseMamba-S (0.9M), SasMamba (0.64M), and GLA-GCN (1.3M), rather
+than the large-model tier of MotionBERT, MotionAGFormer-L, or Pose Magic.
+Its accuracy relative to these baselines will be assessed once the
+from-scratch training run completes and the pending P1 and P2 entries in
+Table~\ref{tab:h36m-sota} are filled in. Because the architectural
+contribution of this thesis is a change of scan order rather than of model
+capacity, the closest point of comparison is PoseMamba-S in the same tier;
+Section~\ref{sec:results-ablation} describes the ablation that will
+attribute any difference from that baseline to the BFS kinematic-tree scan
+itself, rather than to other differences in training configuration.
+
+\section{Results on MPI-INF-3DHP}
+\label{sec:results-mpiinf3dhp}
+
+Section~\ref{sec:intro-objectives} committed this thesis to evaluating
+the proposed architecture on MPI-INF-3DHP \cite{mehta2017mpiinf3dhp} in
+addition to Human3.6M, in order to assess generalization beyond a single
+controlled capture setup, following the same protocol used by the
+baselines in Table~\ref{tab:h36m-sota}
+\cite{tang2023stcformer, zhao2023poseformerv2, huang2025posemamba}.
+
+\textit{This cross-dataset evaluation is still running. MPJPE, PCK, and
+AUC results on MPI-INF-3DHP will be reported here once training and
+evaluation on this dataset complete.}
+
+\section{Ablation Study}
+\label{sec:results-ablation}
+
+A comparison on Human3.6M alone (Section~\ref{sec:results-h36m}) cannot
+by itself attribute any difference from PoseMamba-S to a single cause.
+Such a difference could follow from the BFS kinematic-tree scan order
+(Section~\ref{sec:method-bfs}), from incidental differences in training
+configuration, or from a combination of the two.
+Objective 4 in Section~\ref{sec:intro-objectives} committed this thesis to
+an ablation study designed to resolve this question directly, holding the
+architecture (Sections~\ref{sec:method-block}--\ref{sec:method-bistssm})
+and training configuration (Section~\ref{sec:results-implementation})
+fixed and varying only the spatial scan order applied within the
+BiSTSSM layer, comparing three conditions:
+\begin{enumerate}
+  \item the naive index order $[0, 1, \ldots, 16]$ (the default, illustrated
+    in Figure~\ref{fig:kinematic-tree});
+  \item the proposed breadth-first search kinematic-tree order $\pi$
+    (Section~\ref{sec:method-bfs}); and
+  \item a learned scan order in the style of the Group and Joint Scan
+    strategies of \cite{nguyen2025skeletonmamba}, as the representative
+    learned-scan alternative reviewed in Section~\ref{sec:lit-ssm-pose}.
+\end{enumerate}
+
+\textit{This ablation is still running. P1 and P2 for all three
+scan-order conditions will be reported here once training completes,
+isolating the specific contribution of the BFS kinematic-tree scan order.}
+
+\section{Summary}
+\label{sec:results-summary}
+
+This chapter set out the evaluation of the architecture presented in
+Chapter~\ref{ch:methodology} on Human3.6M, positioning it at roughly
+1.26M parameters within the same efficiency tier as the smallest
+baselines reviewed in Chapter~\ref{ch:literature-review}
+(Section~\ref{sec:results-h36m}). The accuracy of the proposed method, the
+cross-dataset evaluation on MPI-INF-3DHP
+(Section~\ref{sec:results-mpiinf3dhp}), and the scan-order ablation that
+isolates the contribution of the BFS kinematic-tree scan
+(Section~\ref{sec:results-ablation}) all depend on from-scratch training
+runs that are still completing, and are reported here as pending.
+Chapter~\ref{ch:conclusion} summarizes the contributions of this thesis in
+light of the current state of these results, discusses their limitations,
+and outlines the work required to complete the evaluation.
+
+\FloatBarrier
+
