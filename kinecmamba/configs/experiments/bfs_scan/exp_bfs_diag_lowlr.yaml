@@ -1,0 +1,90 @@
+# DIAGNOSTIC — is the BFS checkpoint already at its floor?
+#
+# The bone-loss continue run (exp_bfs_boneloss.yaml) DEGRADED monotonically from epoch 0
+# (42.95 -> 43.61 over 6 epochs, both P1 and P2 worsening). That points to the checkpoint
+# already sitting at its minimum, so continued training with any perturbed objective walks
+# it off that minimum.
+#
+# This config isolates the cause: it uses the EXACT objective the checkpoint was trained
+# with (no bone terms, lambda_diff = 0), only weight EMA, and a very low LR (1e-5) so the
+# model barely moves. Interpretation:
+#   - If P1 still rises from epoch 0  -> the BFS-43 checkpoint is genuinely maxed out;
+#     no polish will beat 41.8, stop chasing it (go to Option B/C).
+#   - If P1 dips below ~42.9 and holds -> there is headroom; a gentle EMA settle helps and
+#     we can build on it.
+# Objective and everything except LR/epochs are identical to exp_bfs_continue.yaml.
+#
+# Load the BFS checkpoint via the finetune path (starts at epoch 0), NOT -r/--resume:
+#   python train.py --config configs/experiments/bfs_scan/exp_bfs_diag_lowlr.yaml \
+#     -p <dir-with-best-BFS-checkpoint> -ms best_epoch.bin -c checkpoint/bfs_diag --wandb false
+
+# General
+train_2d: False
+no_eval: False
+finetune: True
+partial_train: null
+
+# Training — very low LR, short, cosine -> 0
+epochs: 10
+checkpoint_frequency: 5
+batch_size: 8
+accum_steps: 4            # effective batch 32
+dropout: 0.0
+learning_rate: 0.00001    # 1e-5: barely move the already-converged weights
+weight_decay: 0.01
+lr_decay: 0.99            # unused under cosine
+lr_scheduler: cosine
+warmup_epochs: 0
+grad_clip_norm: 1.0
+
+# EMA
+use_ema: True
+ema_decay: 0.999
+
+# Model — MUST match the BFS checkpoint
+backbone: "PoseMamba"
+maxlen: 243
+dim_feat: 64
+mlp_ratio: 2
+depth: 10
+att_fuse: True
+input_channels: 3
+use_ssi: False
+use_msm: False
+use_hypergcn: False
+use_gat_head: False
+forward_type: v2_bfs
+
+# Data
+data_root: data/motion3d/MB3D_f243s81/
+subset_list: [H36M-SH]
+dt_file: h36m_sh_conf_cam_source_final.pkl
+clip_len: 243
+data_stride: 81
+rootrel: True
+sample_stride: 1
+num_joints: 17
+no_conf: False
+gt_2d: False
+
+# Loss — IDENTICAL to the from-scratch objective the checkpoint was trained with (no bone, no diff)
+lambda_3d: 1.0
+lambda_3d_velocity: 20.0
+lambda_scale: 0.5
+lambda_lg: 0.0
+lambda_lv: 0.0
+lambda_diff: 0.0
+lambda_a: 0.0
+lambda_av: 0.0
+lambda_3dw: 0.0
+
+# Augmentation
+synthetic: False
+flip: True
+mask_ratio: 0.
+mask_T_ratio: 0.
+noise: False
+
+# Wandb
+wandb_project: PoseMamba-bfs-scan
+wandb_entity: msds24068-itu-lahore
