@@ -50,6 +50,40 @@ def set_random_seed(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
 
+
+class EMA:
+    """Exponential moving average of model weights. Standard training-time
+    regularizer: the averaged weights are evaluated and saved as the best model,
+    while the raw weights keep training. No effect unless use_ema is enabled."""
+    def __init__(self, model, decay=0.999):
+        self.decay = decay
+        # shadow only floating-point params/buffers (skip int counters like num_batches_tracked)
+        self.shadow = {k: v.detach().clone() for k, v in model.state_dict().items()
+                       if v.dtype.is_floating_point}
+
+    @torch.no_grad()
+    def update(self, model):
+        for k, v in model.state_dict().items():
+            if k in self.shadow:
+                self.shadow[k].mul_(self.decay).add_(v.detach(), alpha=1.0 - self.decay)
+
+
+def ema_swap_in(model, ema):
+    """Copy EMA weights into the model, returning a backup of the raw weights."""
+    backup = {k: model.state_dict()[k].detach().clone() for k in ema.shadow}
+    msd = model.state_dict()
+    for k in ema.shadow:
+        msd[k].copy_(ema.shadow[k])
+    return backup
+
+
+def ema_swap_out(model, backup):
+    """Restore raw weights saved by ema_swap_in."""
+    msd = model.state_dict()
+    for k, v in backup.items():
+        msd[k].copy_(v)
+
+
 def save_checkpoint(chk_path, epoch, lr, optimizer, model_pos, min_loss, is_best=False):
     log.info(f'Saving checkpoint to {chk_path}')
     torch.save({
@@ -211,7 +245,7 @@ def evaluate(args, model_pos, test_loader, datareader, layer_hooks=None):
     
     return e1, e2, results_all, layer_metrics
         
-def train_epoch(args, model_pos, train_loader, losses, optimizer, has_3d, has_gt, accum_steps=1, epoch=0):
+def train_epoch(args, model_pos, train_loader, losses, optimizer, has_3d, has_gt, accum_steps=1, epoch=0, ema=None):
     model_pos.train()
     optimizer.zero_grad()
     for idx, (batch_input, batch_gt) in tqdm(enumerate(train_loader)):    
@@ -283,6 +317,8 @@ def train_epoch(args, model_pos, train_loader, losses, optimizer, has_3d, has_gt
                 torch.nn.utils.clip_grad_norm_(model_pos.parameters(), args.grad_clip_norm)
             optimizer.step()
             optimizer.zero_grad()
+            if ema is not None:
+                ema.update(model_pos)
 def get_beijing_timestamp():
     local_offset = time.localtime().tm_gmtoff   # 当前机器utc时间偏移量
     beijing_offset = int(8 * 60*60)
@@ -429,6 +465,10 @@ def train_with_config(args, opts):
             log.info(f'INFO: Training on {len(train_loader_3d)}(3D) batches')
         log.info(f'Gradient accumulation steps: {accum_steps}, effective batch size: {args.batch_size * accum_steps}')
         log.info(f'LR scheduler: {lr_scheduler}, warmup epochs: {warmup_epochs}')
+        use_ema = getattr(args, 'use_ema', False)
+        ema = EMA(model_pos, decay=getattr(args, 'ema_decay', 0.999)) if use_ema else None
+        if use_ema:
+            log.info(f'EMA enabled, decay {getattr(args, "ema_decay", 0.999)} (averaged weights are evaluated and saved as best)')
         if opts.resume:
             st = checkpoint['epoch']
             if 'optimizer' in checkpoint and checkpoint['optimizer'] is not None:
@@ -476,16 +516,18 @@ def train_with_config(args, opts):
             
             # Curriculum Learning
             if args.train_2d and (epoch >= args.pretrain_3d_curriculum):
-                train_epoch(args, model_pos, posetrack_loader_2d, losses, optimizer, has_3d=False, has_gt=True, accum_steps=accum_steps, epoch=epoch)
-                train_epoch(args, model_pos, instav_loader_2d, losses, optimizer, has_3d=False, has_gt=False, accum_steps=accum_steps, epoch=epoch)
-            train_epoch(args, model_pos, train_loader_3d, losses, optimizer, has_3d=True, has_gt=True, accum_steps=accum_steps, epoch=epoch) 
-            
+                train_epoch(args, model_pos, posetrack_loader_2d, losses, optimizer, has_3d=False, has_gt=True, accum_steps=accum_steps, epoch=epoch, ema=ema)
+                train_epoch(args, model_pos, instav_loader_2d, losses, optimizer, has_3d=False, has_gt=False, accum_steps=accum_steps, epoch=epoch, ema=ema)
+            train_epoch(args, model_pos, train_loader_3d, losses, optimizer, has_3d=True, has_gt=True, accum_steps=accum_steps, epoch=epoch, ema=ema)
+
             # Handle remaining gradient accumulation steps
             if len(train_loader_3d) % accum_steps != 0:
                 if hasattr(args, 'grad_clip_norm') and args.grad_clip_norm > 0:
                     torch.nn.utils.clip_grad_norm_(model_pos.parameters(), args.grad_clip_norm)
                 optimizer.step()
                 optimizer.zero_grad()
+                if ema is not None:
+                    ema.update(model_pos)
             
             elapsed = (time.time() - start_time) / 60
 
@@ -496,7 +538,13 @@ def train_with_config(args, opts):
                     lr,
                    losses['3d_pos'].avg))
             else:
-                e1, e2, results_all, layer_metrics = evaluate(args, model_pos, test_loader, datareader, layer_hooks)
+                if ema is not None:
+                    # evaluate the averaged weights, then restore raw weights for continued training
+                    _bk = ema_swap_in(model_pos, ema)
+                    e1, e2, results_all, layer_metrics = evaluate(args, model_pos, test_loader, datareader, layer_hooks)
+                    ema_swap_out(model_pos, _bk)
+                else:
+                    e1, e2, results_all, layer_metrics = evaluate(args, model_pos, test_loader, datareader, layer_hooks)
                 log.info('[%d] time %.2f lr %f 3d_train %f e1 %f e2 %f' % (
                     epoch + 1,
                     elapsed,
@@ -536,7 +584,13 @@ def train_with_config(args, opts):
                 save_checkpoint(chk_path, epoch, lr, optimizer, model_pos, min_loss)
             if e1 < min_loss:
                 min_loss = e1
-                save_checkpoint(chk_path_best, epoch, lr, optimizer, model_pos, min_loss, is_best=True)
+                if ema is not None:
+                    # persist the EMA (evaluated) weights as the best checkpoint
+                    _bk = ema_swap_in(model_pos, ema)
+                    save_checkpoint(chk_path_best, epoch, lr, optimizer, model_pos, min_loss, is_best=True)
+                    ema_swap_out(model_pos, _bk)
+                else:
+                    save_checkpoint(chk_path_best, epoch, lr, optimizer, model_pos, min_loss, is_best=True)
                 
     if opts.evaluate:
         e1, e2, results_all, _ = evaluate(args, model_pos, test_loader, datareader, layer_hooks=True)

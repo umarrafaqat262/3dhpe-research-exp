@@ -1,0 +1,88 @@
+# Continue-from-checkpoint polish of the 120-epoch corrected-BFS model.
+#
+# Purpose: squeeze a genuine, honest improvement from the existing 43.3mm
+# from-scratch BFS checkpoint WITHOUT retraining from scratch. Two low-risk,
+# standard levers only:
+#   1) weight EMA (averaged weights are evaluated and saved as best_epoch.bin)
+#   2) a low learning rate annealed to ~0 (cosine), so the model settles instead
+#      of sitting at the ~1.5e-4 the exponential schedule still had at epoch 120.
+# The loss objective is kept IDENTICAL to the from-scratch run (no new terms
+# mid-fine-tune) and augmentation is left OFF (MotionBERT's Augmenter2D needs
+# external asset files and targets a different training mode).
+#
+# Honest expectation: this may reach ~42mm; crossing 41.8 from 43.3 in 15 epochs
+# is possible but NOT guaranteed. Report whatever P1 the eval log prints.
+#
+# Load the 120ep checkpoint via CLI:  -p <dir> -ms best_epoch.bin  (finetune path,
+# starts at epoch 0). Do NOT use -r/--resume (it fast-forwards the epoch counter).
+
+# General
+train_2d: False
+no_eval: False
+finetune: True            # load the 120ep checkpoint via -p/-ms, train 15 fresh epochs
+partial_train: null
+
+# Training — short low-LR polish annealed to zero
+epochs: 15
+checkpoint_frequency: 5
+batch_size: 8
+accum_steps: 4            # effective batch 32
+dropout: 0.0
+learning_rate: 0.00002   # 2e-5, gentle
+weight_decay: 0.01
+lr_decay: 0.99            # unused under cosine; kept for compatibility
+lr_scheduler: cosine     # anneals learning_rate -> 0 over the 15 epochs
+warmup_epochs: 0
+grad_clip_norm: 1.0
+
+# EMA (this is the main lever added)
+use_ema: True
+ema_decay: 0.999
+
+# Model — MUST match the from-scratch 120ep checkpoint (exp_bfs_scratch.yaml)
+backbone: "PoseMamba"
+maxlen: 243
+dim_feat: 64
+mlp_ratio: 2
+depth: 10
+att_fuse: True
+input_channels: 3
+use_ssi: False
+use_msm: False
+use_hypergcn: False
+use_gat_head: False
+forward_type: v2_bfs
+
+# Data
+data_root: data/motion3d/MB3D_f243s81/
+subset_list: [H36M-SH]
+dt_file: h36m_sh_conf_cam_source_final.pkl
+clip_len: 243
+data_stride: 81
+rootrel: True
+sample_stride: 1
+num_joints: 17
+no_conf: False
+gt_2d: False
+
+# Loss — identical to the from-scratch run (do not change the objective mid-fine-tune)
+lambda_3d_velocity: 20.0
+lambda_scale: 0.5
+lambda_lv: 0.0
+lambda_lg: 0.0
+lambda_a: 0.0
+lambda_av: 0.0
+lambda_3dw: 0.0
+lambda_3d: 1.0
+lambda_diff: 0.0
+
+# Augmentation — OFF (Augmenter2D needs external assets and a different mode)
+synthetic: False
+flip: True
+mask_ratio: 0.
+mask_T_ratio: 0.
+noise: False
+
+# Wandb
+wandb_project: PoseMamba-bfs-scan
+wandb_entity: msds24068-itu-lahore
