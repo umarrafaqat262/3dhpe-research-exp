@@ -115,3 +115,39 @@ ablation). Success = best P1 < 41.8. If it stalls ≥ 42, next steps are: raise 
 weights (`lambda_lg: 1.0`, `lambda_lv: 2.0`), enable 2D augmentation (needs Augmenter2D
 assets), or extend the anneal to 40–60 epochs. Thesis "Ours" numbers stay TBD until a
 final measured P1 is chosen.
+
+---
+
+# Diagnostic: is the BFS checkpoint already at its floor? (`exp_bfs_diag_lowlr.yaml`)
+
+The bone-loss run above **degraded monotonically from epoch 0** (42.95 → 43.61 over 6
+epochs, both P1 and P2 worsening). That is the signature of a checkpoint already sitting
+at its minimum: any continued training with a perturbed objective walks it off that
+minimum. This diagnostic isolates the cause before spending more compute.
+
+## What this config does
+Identical to `exp_bfs_continue.yaml` except it uses the **exact objective the checkpoint
+was trained with** (no bone terms, `lambda_diff: 0`), EMA only, a very low `learning_rate:
+1e-5`, and `epochs: 10`. So the only things acting on the model are a tiny LR and weight
+EMA — nothing that should push MPJPE up.
+
+## Run
+```bash
+cd kinecmamba
+python train.py --config configs/experiments/bfs_scan/exp_bfs_diag_lowlr.yaml \
+  -p checkpoints/bfs_scratch_120 -ms best_epoch.bin \
+  -c checkpoint/bfs_diag --wandb false
+```
+Use the same checkpoint dir as the bone-loss run. Finetune path (`-p/-ms`); do NOT use
+`-r/--resume`. Epoch-0 eval should read ≈ 42.95 (confirms a clean load).
+
+## Interpretation (this is the point of the run)
+- **P1 still rises from epoch 0** → the BFS-43 checkpoint is genuinely maxed out. No
+  polish will beat 41.8; stop chasing it. Move to Option B (fine-tune the native 41.8
+  PoseMamba-S checkpoint + bone loss) or Option C (report BFS as an honest neutral
+  ablation).
+- **P1 dips below ~42.9 and holds** → there is headroom in the EMA settle; build on it
+  with a gentle bone loss and a longer anneal.
+
+## Report back
+The full epoch table (P1/P2 per epoch) and the best P1. That table decides the next step.
