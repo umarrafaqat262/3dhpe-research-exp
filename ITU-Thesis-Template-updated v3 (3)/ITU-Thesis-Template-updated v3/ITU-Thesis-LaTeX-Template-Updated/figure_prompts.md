@@ -4,14 +4,20 @@ One prompt per figure the thesis references. Generate each image, then place it 
 `figures/` with the filename noted, and (for the two `\includegraphics` slots) uncomment
 the `\includegraphics` line in the `.tex`.
 
-Thesis figures:
-| # | Label in .tex | File to save | Status in thesis |
-|---|---------------|--------------|------------------|
-| 1 | `fig:architecture-pipeline` (methodology.tex) | `figures/architecture.pdf` | image slot (uncomment `\includegraphics`) |
-| 2 | `fig:kinematic-tree` (methodology.tex) | `figures/kinematic_tree.pdf` | currently TikZ; replace with image if desired |
-| 3 | `fig:bistssm-layer` (methodology.tex) | `figures/bistssm_layer.pdf` | currently TikZ; replace with image if desired |
-| 4 | `fig:scan-order-comparison` (methodology.tex) | `figures/scan_order.pdf` | currently TikZ; replace with image if desired |
-| 5 | `fig:results-plot` (results.tex) | `figures/results_plot.pdf` | image slot; DATA-driven (see note) |
+All five figures are now `\includegraphics` slots in the thesis (a placeholder box with a
+commented `\includegraphics` line). Each figure covers one thing only — no overlap between
+them, so generate all five:
+
+| # | Label in .tex | File to save | Covers |
+|---|---------------|--------------|--------|
+| 1 | `fig:architecture-pipeline` (methodology.tex) | `figures/architecture.pdf` | the end-to-end pipeline ONLY (no BiSTSSM inset, no BFS panel) |
+| 2 | `fig:kinematic-tree` (methodology.tex) | `figures/kinematic_tree.pdf` | the full-body skeleton kinematic tree |
+| 3 | `fig:bistssm-layer` (methodology.tex) | `figures/bistssm_layer.pdf` | the internals of one BiSTSSM layer |
+| 4 | `fig:scan-order-comparison` (methodology.tex) | `figures/scan_order.pdf` | naive index order vs BFS order strips |
+| 5 | `fig:results-plot` (results.tex) | `figures/results_plot.pdf` | accuracy-vs-size plot (DATA-driven; see note) |
+
+To insert a figure: put the image at the path above and uncomment the `\includegraphics`
+line in the `.tex` (remove the placeholder box). `graphicx` is already loaded.
 
 **Facts to keep consistent across every figure** (do not change):
 - 17 joints (Human3.6M order): 0 Pelvis, 1 Right Hip, 2 Right Knee, 3 Right Ankle,
@@ -39,7 +45,7 @@ exactly the labels given; do not invent extra captions, equations, or legends.
 
 Create a publication-quality architecture diagram for a top-tier computer vision conference paper (CVPR, ICCV, ECCV, NeurIPS). The figure must look manually designed in Adobe Illustrator or Figma by a researcher, not AI-generated, and not like a PowerPoint flowchart.
 
-Use a clean landscape (16:9) layout with a modern horizontal network design. The main backbone runs left to right across the center. Place a compact module inset in the upper-right connected with a thin callout line, and place the proposed contribution panel across the bottom. Resemble architecture diagrams from recent Transformer, Mamba, MotionBERT, or Vision Transformer papers.
+Use a clean landscape (16:9) layout with a modern horizontal network design. The main backbone runs left to right across the center, with generous whitespace above and below. Resemble architecture diagrams from recent Transformer, Mamba, MotionBERT, or Vision Transformer papers. IMPORTANT: this figure shows the end-to-end pipeline ONLY. Do NOT draw a BiSTSSM-layer inset and do NOT draw a BFS scan-order panel here; those are separate figures (Figures 3 and 4). The BiSTSSM blocks appear only as labelled boxes in the backbone.
 
 Style: flat vector graphics; white background; thin dark-gray outlines; rounded rectangles; soft blue for feature tensors; soft gray for computation modules; muted amber only for the proposed contribution panel; professional Helvetica/Arial typography; perfect alignment and equal spacing; large whitespace; tensor-flow ribbons or clean feature arrows; no gradients; no shadows; no 3D rendering; no clip art; no decorative elements; no photorealism.
 
@@ -50,12 +56,7 @@ MAIN NETWORK (center):
 - Continue to **Output head: LayerNorm then Linear C to 3**.
 - Far right: a small 3D human pose skeleton in perspective labeled **3D HPE**. Below it: **Output: 3D pose (B, T, J, 3)**.
 
-MODULE INSET (upper right, thin callout line from the Spatial BiSTSSM Block), title **BiSTSSM layer**: Input Features (↓) **Four-directional Cross-Scan** (↓) a dashed container labeled **×4 (one per direction)** holding four small parallel blocks labeled **Selective SSM**; merge into **Cross-Merge** (↓) **Output Features**. Keep it conceptual and clean.
-
-PROPOSED CONTRIBUTION (bottom, muted amber border), title **BFS kinematic-tree scan order**:
-- Left: a clean rooted kinematic tree with labeled joints and thin edges: Pelvis → {Right Hip → Right Knee → Right Ankle}, {Left Hip → Left Knee → Left Ankle}, {Spine → Thorax}; Thorax → {Neck → Head}, {Left Shoulder → Left Elbow → Left Wrist}, {Right Shoulder → Right Elbow → Right Wrist}.
-- Right: two horizontal strips. **Naive index order**: 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16. Below (↓) **BFS kinematic order**: 0 1 4 7 2 5 8 3 6 9 11 14 10 12 15 13 16.
-- Between the backbone and this panel: **permute joints before scan, inverse-permute after merge**.
+That is the whole figure: a single left-to-right pipeline. No inset, no bottom panel, no kinematic tree, no scan-order strips (those are Figures 3 and 4).
 
 Use exactly these labels. The final figure should be indistinguishable from a manually created architecture figure in a recent CVPR/ICCV paper.
 
@@ -63,24 +64,27 @@ Use exactly these labels. The final figure should be indistinguishable from a ma
 ## FIGURE 2 — Kinematic tree  (save as figures/kinematic_tree.pdf)
 ────────────────────────────────────────────────────────────────────────
 
-[Apply the shared visual style above.] A clean rooted-tree diagram titled nothing (no
-title inside the image) showing the 17-joint Human3.6M skeleton as a kinematic tree.
-Each joint is a rounded rectangle node labeled with its index and name; the pelvis node
-(root, index 0) is shaded soft gray to mark the root, all others white. Thin dark-gray
-edges connect parents to children (each edge is a bone). Lay the tree top-to-bottom, root
-at top, in the exact structure:
+[Apply the shared visual style above.] Draw a **full-body human skeleton**, front-facing,
+standing upright with arms slightly out and legs apart, as a clean stick-figure: each of
+the 17 joints is a small filled circle and each bone is a thin straight line between two
+joints. Do not draw muscles, flesh, or a silhouette — joints and bones only. Label every
+joint with its index and name in a small caption next to the circle. Mark the pelvis
+(index 0) as the root with a slightly larger circle in a muted amber fill; all other
+joints soft blue. Position the joints anatomically:
 
-- 0 Pelvis (root) has three children: 1 Right Hip, 4 Left Hip, 7 Spine.
-- 1 Right Hip → 2 Right Knee → 3 Right Ankle.
-- 4 Left Hip → 5 Left Knee → 6 Left Ankle.
-- 7 Spine → 8 Thorax.
-- 8 Thorax has three children: 9 Neck, 11 Left Shoulder, 14 Right Shoulder.
-- 9 Neck → 10 Head.
-- 11 Left Shoulder → 12 Left Elbow → 13 Left Wrist.
-- 14 Right Shoulder → 15 Right Elbow → 16 Right Wrist.
+- 10 Head at the very top, 9 Neck just below it, 8 Thorax below the neck, 7 Spine below
+  the thorax, 0 Pelvis at the hip center (root).
+- From the thorax (8): 11 Left Shoulder and 14 Right Shoulder out to the sides; then
+  11 → 12 Left Elbow → 13 Left Wrist down the left arm, and 14 → 15 Right Elbow →
+  16 Right Wrist down the right arm.
+- From the pelvis (0): 1 Right Hip and 4 Left Hip; then 1 → 2 Right Knee → 3 Right Ankle
+  down the right leg, and 4 → 5 Left Knee → 6 Left Ankle down the left leg.
 
-Keep the left/right legs on the outer sides and the spine chain in the middle so the tree
-is symmetric and uncluttered. Use exactly these 17 index+name labels; add no other text.
+The bones must be exactly these 16 parent→child edges: 0–1, 1–2, 2–3 (right leg);
+0–4, 4–5, 5–6 (left leg); 0–7, 7–8, 8–9, 9–10 (spine and head); 8–11, 11–12, 12–13
+(left arm); 8–14, 14–15, 15–16 (right arm). The result reads as a human skeleton whose
+bones form a tree rooted at the pelvis. Use exactly these 17 index+name labels; add no
+other text.
 
 ────────────────────────────────────────────────────────────────────────
 ## FIGURE 3 — BiSTSSM layer  (save as figures/bistssm_layer.pdf)
