@@ -1,8 +1,11 @@
 # KinecMamba on MPI-INF-3DHP with BFS kinematic scan.
 #
-# Recipe follows the verified P-STMO 3DHP protocol: 81-frame window, GT 2D input
-# (in_channels=2 / no_conf), seq2seq (predict all T frames), effective batch ~160,
-# lr 7e-4 with 0.97 exponential decay. Consumed by train_mpi.py (NOT train.py).
+# Follows PoseMamba-S's stated MPI-INF-3DHP protocol (= MotionBERT data processing):
+# 27-frame window (PoseMamba-S; Base uses 81), GT 2D input (in_channels=2 / no_conf),
+# seq2seq (predict all T frames), MPJPE primary metric. Skeleton is MotionBERT's unified
+# 17-joint Human3.6M-order skeleton (root = joint 0), so the default H36M BFS scan and
+# H36M bone table apply unchanged. Effective batch ~160, lr 7e-4 with 0.97 exponential
+# decay. Consumed by train_mpi.py (NOT train.py).
 #
 # Train:
 #   python train_mpi.py --config configs/experiments/mpi_inf_3dhp/exp_mpi_bfs.yaml -c checkpoint/mpi_bfs
@@ -32,10 +35,10 @@ grad_clip_norm: 1.0
 use_ema: True
 ema_decay: 0.999
 
-# Model — matches the H36M BFS config; BFS scan order is switched to MPI joints
-# at runtime by train_mpi.py (csms6s.set_bfs_order('mpi')).
+# Model — matches the H36M BFS config. MPI uses the same 17-joint H36M-order skeleton,
+# so the default H36M BFS scan order (csms6s.BFS_ORDER) applies with no runtime switch.
 backbone: "PoseMamba"
-maxlen: 243               # positional-embed capacity; clips are clip_len (81) long
+maxlen: 243               # positional-embed capacity; clips are clip_len (27) long
 dim_feat: 64
 mlp_ratio: 2
 depth: 10
@@ -52,17 +55,16 @@ data_root: data/motion3d/mpi_inf_3dhp/
 train_file: data_train_3dhp.npz     # dict keyed by (subject, seq); value[0][cam]{'data_3d','data_2d'}
 test_file: data_test_3dhp.npz       # dict keyed by 'TS1'..'TS6'; value{'data_3d','data_2d','valid'}
 num_joints: 17
-clip_len: 81              # P-STMO input window f=81
-data_stride: 81           # non-overlapping training clips
-rootrel: True             # 3D is root-relative around joint 14 (dataset zeroes root)
+clip_len: 27              # PoseMamba-S MPI input window = 27 frames
+data_stride: 27           # non-overlapping training clips
+rootrel: True             # 3D is root-relative around joint 0 (dataset zeroes root)
 sample_stride: 1
 no_conf: True             # slice input to first 2 channels (GT 2D)
 gt_2d: False
 
 # Loss — 3D + scale + velocity + temporal-smoothness + anatomy-aware bone losses.
-# Bone losses use the MPI limb table (loss.py loss_limb_gt_mpi / loss_limb_var_mpi,
-# wired in train_mpi.py) built from the true MPI-INF-3DHP skeleton (root joint 14),
-# so they stay anatomically meaningful on this dataset.
+# Bone losses use the H36M limb table (loss.py loss_limb_gt / loss_limb_var): MPI clips
+# are in MotionBERT's 17-joint Human3.6M order (root = joint 0), same as H36M.
 lambda_3d: 1.0
 lambda_3d_velocity: 20.0
 lambda_scale: 0.5
@@ -75,7 +77,7 @@ lambda_3dw: 0.0
 
 # Augmentation
 synthetic: False
-flip: True                # random flip in training + flip-TTA at eval (MPI joint groups)
+flip: True                # random flip in training + flip-TTA at eval (H36M joint groups)
 mask_ratio: 0.
 mask_T_ratio: 0.
 noise: False

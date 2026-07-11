@@ -132,42 +132,6 @@ def loss_limb_gt(x, gt):
     limb_lens_gt = get_limb_lens(gt) # (N, T, 16)
     return nn.L1Loss()(limb_lens_x, limb_lens_gt)
 
-# --- MPI-INF-3DHP variants -------------------------------------------------
-# The 17-joint MPI-INF-3DHP skeleton (used by train_mpi.py) has a DIFFERENT joint
-# order than Human3.6M: its root/pelvis is joint 14, not joint 0. The 16 bones below
-# are the true parent-child edges of that skeleton, so the bone losses stay
-# anatomically meaningful on MPI. Do NOT use get_limb_lens (H36M order) on MPI data.
-# MPI joint order: 0 head_top, 1 neck, 2 R_sho, 3 R_elb, 4 R_wri, 5 L_sho, 6 L_elb,
-# 7 L_wri, 8 R_hip, 9 R_kne, 10 R_ank, 11 L_hip, 12 L_kne, 13 L_ank, 14 pelvis,
-# 15 spine, 16 head.
-def get_limb_lens_mpi(x):
-    '''
-        Input: (N, T, 17, 3)  in MPI-INF-3DHP joint order
-        Output: (N, T, 16)
-    '''
-    limbs_id = [[14,8], [8,9], [9,10],       # right leg
-                [14,11], [11,12], [12,13],   # left leg
-                [14,15], [15,1],             # pelvis -> spine -> neck
-                [1,16], [16,0],              # neck -> head -> head_top
-                [1,2], [2,3], [3,4],         # right arm
-                [1,5], [5,6], [6,7]]         # left arm
-    limbs = x[:,:,limbs_id,:]
-    limbs = limbs[:,:,:,0,:]-limbs[:,:,:,1,:]
-    limb_lens = torch.norm(limbs, dim=-1)
-    return limb_lens
-
-def loss_limb_var_mpi(x):
-    if x.shape[1]<=1:
-        return torch.FloatTensor(1).fill_(0.)[0].to(x.device)
-    limb_lens = get_limb_lens_mpi(x)
-    limb_lens_var = torch.var(limb_lens, dim=1)
-    return torch.mean(limb_lens_var)
-
-def loss_limb_gt_mpi(x, gt):
-    limb_lens_x = get_limb_lens_mpi(x)
-    limb_lens_gt = get_limb_lens_mpi(gt)
-    return nn.L1Loss()(limb_lens_x, limb_lens_gt)
-
 def loss_velocity(predicted, target):
     """
     Mean per-joint velocity error (i.e. mean Euclidean distance of the 1st derivative)

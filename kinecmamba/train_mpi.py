@@ -3,9 +3,10 @@
 Faithful sibling of train.py (same args, model build, AdamW + LR schedule, EMA,
 checkpoint-load incl. -e eval-only, loss assembly WITH bone losses) but:
   - dataset comes from lib/data/dataset_3dhp.py (train clips + per-seq test),
-  - set_bfs_order('mpi') is called after import when forward_type == 'v2_bfs',
+    which uses MotionBERT's 17-joint Human3.6M-order skeleton (root = joint 0),
+    so the default H36M BFS scan order and H36M bone table apply unchanged,
   - evaluate() is replaced by evaluate_mpi(): flip-TTA, per-sequence prediction
-    accumulation, Python MPJPE/PCK@150/AUC, and export of inference_data.mat.
+    accumulation, MPJPE (primary) plus PCK@150/AUC, and export of inference_data.mat.
   - in_channels = 2 (GT 2D input, no confidence).
 
 Do NOT use this for H36M; H36M stays on train.py.
@@ -38,10 +39,6 @@ from lib.data.dataset_3dhp import (MPITrainDataset3D, MPITestDataset3D,
 from lib.eval.metrics_3dhp import mpjpe_mm, pck, auc, export_inference_mat
 import logger
 from logger import colorlogger
-
-# Switch the BFS cross-scan joint permutation to MPI order (no effect on H36M runs,
-# which never import this module). Only meaningful for forward_type == 'v2_bfs'.
-from lib.model import csms6s
 
 
 def parse_args():
@@ -110,7 +107,7 @@ def save_checkpoint(chk_path, epoch, lr, optimizer, model_pos, min_loss, is_best
 
 
 def _flip_torch(x):
-    """Horizontal flip of a torch tensor [B,T,17,C] in MPI joint order."""
+    """Horizontal flip of a torch tensor [B,T,17,C] in H36M joint order."""
     out = x.clone()
     out[..., 0] *= -1
     out[..., JOINTS_LEFT + JOINTS_RIGHT, :] = out[..., JOINTS_RIGHT + JOINTS_LEFT, :]
@@ -145,7 +142,7 @@ def evaluate_mpi(args, model_pos, test_loader, checkpoint_dir):
         else:
             pred = model_pos(batch_input)
 
-        # root-relative around joint 14 (both pred and GT use the MPI pelvis)
+        # root-relative around joint 0 (both pred and GT use the H36M pelvis)
         pred = pred - pred[:, :, MPI_ROOT:MPI_ROOT + 1, :]
         pred[:, :, MPI_ROOT, :] = 0.0
         pred = pred.cpu().numpy()
@@ -186,7 +183,7 @@ def evaluate_mpi(args, model_pos, test_loader, checkpoint_dir):
 
 
 def train_epoch(args, model_pos, train_loader, losses, optimizer, accum_steps=1, ema=None):
-    """MPI train epoch. GT arrives already root-relative (root=14 zeroed) from the
+    """MPI train epoch. GT arrives already root-relative (root=0 zeroed) from the
     dataset, so we do NOT re-root here (unlike train.py's H36M path). Full loss
     assembly with bone losses is kept."""
     model_pos.train()
@@ -207,10 +204,10 @@ def train_epoch(args, model_pos, train_loader, losses, optimizer, accum_steps=1,
         loss_3d_pos = loss_mpjpe(predicted_3d_pos, batch_gt)
         loss_3d_scale = n_mpjpe(predicted_3d_pos, batch_gt)
         loss_3d_velocity = loss_velocity(predicted_3d_pos, batch_gt)
-        # MPI-specific bone losses: MPI's 17-joint skeleton (root=14) has a different
-        # joint order than H36M, so use the MPI limb table (loss.py get_limb_lens_mpi).
-        loss_lv = loss_limb_var_mpi(predicted_3d_pos)
-        loss_lg = loss_limb_gt_mpi(predicted_3d_pos, batch_gt)
+        # Bone losses use the H36M limb table (loss.py get_limb_lens): MPI clips are in
+        # MotionBERT's 17-joint Human3.6M order (root = joint 0), same as H36M.
+        loss_lv = loss_limb_var(predicted_3d_pos)
+        loss_lg = loss_limb_gt(predicted_3d_pos, batch_gt)
         loss_3d_w = weighted_mpjpe(predicted_3d_pos, batch_gt, w_mpjpe)
 
         dif_seq = predicted_3d_pos[:, 1:, :, :] - predicted_3d_pos[:, :-1, :, :]
@@ -266,11 +263,6 @@ def train_with_config(args, opts):
     with open(os.path.join(opts.checkpoint, 'config.yaml'), 'w') as f:
         yaml.dump(args, f, sort_keys=False)
     log.info(f"Number of GPUs found:{torch.cuda.device_count()}")
-
-    # Switch BFS scan order to MPI-INF-3DHP joints for the BFS forward type.
-    if getattr(args, 'forward_type', '') == 'v2_bfs':
-        csms6s.set_bfs_order('mpi')
-        log.info(f'BFS scan order set to MPI: {csms6s.BFS_ORDER}')
 
     if opts.wandb:
         run_name = os.path.basename(opts.checkpoint)

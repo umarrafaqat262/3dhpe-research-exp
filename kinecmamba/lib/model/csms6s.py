@@ -190,58 +190,12 @@ class CrossMerge_plus_poselimbs(torch.autograd.Function):
         xs[:, 2:4] = torch.flip(xs[:, 0:2], dims=[-1])
         xs = xs.view(B, 4, C, H, W)
         return xs
-# BFS scan: permute joints (W dim) to BFS kinematic order before scanning.
-#
-# H36M 17-joint BFS order (the default; unchanged from the original code).
-BFS_ORDER_H36M = [0, 1, 4, 7, 2, 5, 8, 3, 6, 9, 11, 14, 10, 12, 15, 13, 16]
-
-# MPI-INF-3DHP 17-joint BFS order (root = pelvis at index 14).
-# Joint names (VERIFY against the actual npz before trusting this on MPI):
-#   0 head_top, 1 neck, 2 R_shoulder, 3 R_elbow, 4 R_wrist, 5 L_shoulder,
-#   6 L_elbow, 7 L_wrist, 8 R_hip, 9 R_knee, 10 R_ankle, 11 L_hip, 12 L_knee,
-#   13 L_ankle, 14 pelvis(root), 15 spine, 16 head.
-# Kinematic tree: 14->{8,11,15}, 15->{1}, 1->{2,5,16}, 16->{0},
-#   2->3->4, 5->6->7, 8->9->10, 11->12->13. BFS from 14, children ascending:
-BFS_ORDER_MPI = [14, 8, 11, 15, 9, 12, 1, 10, 13, 2, 5, 16, 3, 6, 0, 4, 7]
-
-
-def _invert_order(order):
-    """Return the inverse permutation: inv[order[i]] == i for all i.
-    Equivalent to numpy.argsort(order) but with no numpy dependency."""
-    inv = [0] * len(order)
-    for i, o in enumerate(order):
-        inv[o] = i
-    return inv
-
-
-# BFS_ORDER is NOT its own inverse (H36M fails at indices 10-15, the arm/head
-# joints), so the inverse permutation is computed explicitly.
+# BFS scan: permute joints (W dim) to BFS kinematic order before scanning
+BFS_ORDER = [0, 1, 4, 7, 2, 5, 8, 3, 6, 9, 11, 14, 10, 12, 15, 13, 16]
+# BFS_ORDER is NOT its own inverse (it fails at indices 10-15, the arm/head
+# joints), so the inverse permutation must be computed explicitly.
 # INV_BFS_ORDER = argsort(BFS_ORDER); INV_BFS_ORDER[BFS_ORDER[i]] == i for all i.
-INV_BFS_ORDER_H36M = _invert_order(BFS_ORDER_H36M)   # [0,1,4,7,2,5,8,3,6,9,12,10,13,15,11,14,16]
-INV_BFS_ORDER_MPI = _invert_order(BFS_ORDER_MPI)
-
-# Active globals read at call time by CrossScan_bfs / CrossMerge_bfs. They default
-# to the H36M order so existing H36M behaviour is byte-for-byte identical. train_mpi
-# calls set_bfs_order('mpi') after import to switch to the MPI joint order WITHOUT
-# editing the cross-scan classes (they look these names up in module globals at
-# execution time, so reassigning here changes their behaviour).
-BFS_ORDER = BFS_ORDER_H36M
-INV_BFS_ORDER = INV_BFS_ORDER_H36M
-
-
-def set_bfs_order(order_name):
-    """Switch the active BFS joint permutation. 'h36m' (default) or 'mpi'.
-    Mutates the module globals BFS_ORDER / INV_BFS_ORDER that CrossScan_bfs and
-    CrossMerge_bfs read at call time. Returns the (order, inv_order) now active."""
-    global BFS_ORDER, INV_BFS_ORDER
-    name = str(order_name).lower()
-    if name in ('h36m', 'h36', 'default'):
-        BFS_ORDER, INV_BFS_ORDER = BFS_ORDER_H36M, INV_BFS_ORDER_H36M
-    elif name in ('mpi', 'mpi_inf_3dhp', '3dhp'):
-        BFS_ORDER, INV_BFS_ORDER = BFS_ORDER_MPI, INV_BFS_ORDER_MPI
-    else:
-        raise ValueError(f"Unknown BFS order name: {order_name!r} (use 'h36m' or 'mpi')")
-    return BFS_ORDER, INV_BFS_ORDER
+INV_BFS_ORDER = [0, 1, 4, 7, 2, 5, 8, 3, 6, 9, 12, 10, 13, 15, 11, 14, 16]
 
 class CrossScan_bfs(torch.autograd.Function):
     @staticmethod
