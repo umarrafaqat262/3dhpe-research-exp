@@ -321,7 +321,7 @@ scan order or grouping directly from data (e.g., Group/Joint Scan), (ii)
 fusing separately-computed topology or structure information alongside the
 sequence representation, and (iii) decoupling or restructuring the
 bidirectional scan computation itself. What none of these strategies
-provides is a scan order derived \emph{directly and deterministically}
+provides is a scan order derived \emph{directly}
 from the skeleton's own kinematic hierarchy, one that uses the
 parent-child joint structure of the body itself, rather than a learned
 grouping or an auxiliary topology-fusion module, to determine the order in
@@ -367,7 +367,7 @@ no inherent causal direction, and so a joint's representation should be
 informed by structural context in both directions along the traversal, not
 only by joints visited before it.
 
-\textbf{A principled, deterministic node ordering measurably improves
+\textbf{A principled node ordering measurably improves
 sequential modeling of graph-structured data.} Outside the pose estimation
 and vision literature, GraphRNN \cite{you2018graphrnn} studied the problem
 of generating graphs using autoregressive sequence models, and found that
@@ -398,7 +398,7 @@ Section~\ref{sec:lit-ssm-pose}: since the human skeleton is formally a
 rooted kinematic tree (SMPL), since bidirectional context benefits
 non-causal structural data (BERT, Vision Mamba, VMamba), and since BFS
 ordering is a principled way to linearize a graph for a sequence model
-while preserving locality (GraphRNN), a deterministic breadth-first
+while preserving locality (GraphRNN), a breadth-first
 traversal of the skeleton's kinematic tree, combined with bidirectional
 scanning, offers an anatomically-grounded alternative to both fixed
 index-based orderings and learned scan strategies. Section~\ref{sec:lit-summary-gap}
@@ -436,7 +436,7 @@ body (SMPL), evidence that bidirectional context benefits non-causal
 structural data (BERT, Vision Mamba, VMamba), and evidence that a
 breadth-first traversal is a principled, locality-preserving way to
 linearize a graph for a sequence model (GraphRNN). No existing SSM-based
-pose estimation method, however, combines them into a deterministic,
+pose estimation method, however, combines them into a
 kinematic-tree-derived scan order.
 
 This is the specific research gap this thesis addresses. Chapter~\ref{ch:methodology}

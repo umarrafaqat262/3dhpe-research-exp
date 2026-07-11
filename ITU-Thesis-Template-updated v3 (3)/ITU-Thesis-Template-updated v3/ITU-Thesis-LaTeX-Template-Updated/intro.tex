@@ -80,8 +80,8 @@ hierarchical, tree-structured graph of joints connected by bones
 largely heuristic or learned: some methods reorder joints according to an
 ad hoc geometric heuristic, while others, such as the Group Scan and Joint
 Scan strategies explored in \cite{nguyen2025skeletonmamba}, learn scan
-groupings directly from data. Yet the general finding that a principled,
-deterministic node ordering can markedly improve sequential modeling of
+groupings directly from data. Yet the general finding that a principled
+node ordering can markedly improve sequential modeling of
 graph-structured data is well established outside the pose estimation
 literature. Breadth-first search (BFS) ordering, for instance, has been
 shown to make auto-regressive sequence models over graphs both more
@@ -104,8 +104,8 @@ so joints that are close along the body's kinematic chains stay close in the
 scanned sequence. It is motivated by the hypothesis that a scan order derived
 directly from skeletal anatomy, rather than from a fixed joint index or a
 learned grouping, better preserves local joint adjacency for the SSM's local
-modeling capacity while remaining simple, deterministic, and free of
-additional learned parameters. We evaluate KinecMamba on the standard
+modeling capacity while following the body's own skeletal structure. We
+evaluate KinecMamba on the standard
 Human3.6M \cite{ionescu2014human36m} and MPI-INF-3DHP
 \cite{mehta2017mpiinf3dhp} benchmarks against established Transformer- and
 SSM-based baselines.
@@ -168,9 +168,30 @@ Problem 3 is the central question this thesis addresses: \textbf{given a
 linear-time, bidirectional state space backbone that resolves Problems 1 and
 2, how should the skeleton's joints be ordered along the scan so that the
 order follows the body's own kinematic structure rather than an arbitrary
-index or a learned grouping?} KinecMamba answers it with a deterministic
-breadth-first traversal of the kinematic tree, taken in the root-to-extremity
-direction of a forward kinematic pass.
+index or a learned grouping?} KinecMamba answers it with a breadth-first
+traversal of the kinematic tree, taken in the root-to-extremity direction of a
+forward kinematic pass.
+
+\section{Limitations of Existing Methods}
+\label{sec:intro-limitations-existing}
+
+The problems above surface as five concrete limitations of current 2D-to-3D
+lifting methods, which together motivate the design choices of this thesis:
+
+\begin{enumerate}
+  \item The self-attention of Transformer-based lifters carries a
+    computational and memory cost that grows quadratically with the number of
+    spatio-temporal tokens.
+  \item Strong attention-based models reach their accuracy with large
+    parameter counts and multiply-accumulate operations (MACs).
+  \item That cost translates into high GPU memory consumption at the long
+    input windows these methods rely on.
+  \item Existing designs struggle to model global and local spatio-temporal
+    dependencies of the skeleton at the same time.
+  \item Existing scan or ordering strategies for sequence models over the
+    skeleton, whether a fixed joint index or a learned grouping, do not follow
+    the geometric structure of the human body.
+\end{enumerate}
 
 \section{Objectives}
 \label{sec:intro-objectives}
@@ -179,32 +200,35 @@ Guided by the problem statement in Section~\ref{sec:intro-problem-statement},
 the objectives of this thesis are as follows:
 
 \begin{enumerate}
-  \item \textbf{To design a bidirectional spatio-temporal state space
-    architecture for monocular 3D human pose estimation} that models both
-    intra-frame joint relationships and inter-frame temporal correlations
-    while retaining the linear-time computational complexity of state
-    space models \cite{gu2023mamba, gu2021s4}, avoiding the quadratic
-    scaling of self-attention-based approaches \cite{zheng2021poseformer,
+  \item \textbf{To design an efficient bidirectional spatio-temporal state
+    space architecture for monocular 3D human pose estimation} that models
+    both intra-frame joint relationships and inter-frame temporal
+    correlations while retaining the linear-time complexity of state space
+    models \cite{gu2023mamba, gu2021s4}, avoiding the quadratic scaling of
+    self-attention-based approaches \cite{zheng2021poseformer,
     zhang2022mixste, zhu2023motionbert}.
 
   \item \textbf{To introduce a breadth-first search (BFS) kinematic-tree
     scan order} as the spatial scan strategy for this architecture,
     traversing the skeleton's joints outward from a root joint according
     to the parent-child hierarchy defined by the body's kinematic tree
-    \cite{loper2015smpl}, as a deterministic, anatomically-grounded
-    alternative to the fixed-index and learned scan orders used in prior
-    SSM-based pose estimation work \cite{nguyen2025skeletonmamba},
-    motivated by evidence that BFS node orderings improve sequential
-    modeling of graph-structured data \cite{you2018graphrnn}.
+    \cite{loper2015smpl}, as an anatomically-grounded alternative to the
+    fixed-index and learned scan orders used in prior SSM-based pose
+    estimation work \cite{nguyen2025skeletonmamba}, motivated by evidence
+    that BFS node orderings improve sequential modeling of graph-structured
+    data \cite{you2018graphrnn}.
+
+  \item \textbf{To add an anatomy-aware bone-length objective} that
+    supervises the lengths and temporal consistency of the skeleton's bones,
+    reinforcing the same kinematic structure the BFS scan order follows.
 
   \item \textbf{To empirically evaluate KinecMamba} on the standard
     Human3.6M \cite{ionescu2014human36m} and MPI-INF-3DHP
-    \cite{mehta2017mpiinf3dhp} benchmarks, comparing accuracy (MPJPE) and
-    computational efficiency (parameter count, MACs) against
-    representative Transformer-based \cite{zhang2022mixste,
-    zhu2023motionbert, mehraban2024motionagformer} and state-space-based
-    \cite{zhang2024posemagic, huang2025posemamba, cui2025sasmamba,
-    wang2025dbmambapose} baselines.
+    \cite{mehta2017mpiinf3dhp} benchmarks, comparing accuracy and
+    computational efficiency against representative Transformer-based
+    \cite{zhang2022mixste, zhu2023motionbert, mehraban2024motionagformer}
+    and state-space-based \cite{zhang2024posemagic, huang2025posemamba,
+    cui2025sasmamba, wang2025dbmambapose} baselines.
 
   \item \textbf{To isolate and quantify the specific contribution of the
     BFS kinematic-tree scan} through ablation studies comparing it against
@@ -219,31 +243,30 @@ the objectives of this thesis are as follows:
 
 The contributions of this thesis are the following:
 
-\begin{itemize}
+\begin{enumerate}
   \item \textbf{KinecMamba}, a bidirectional spatio-temporal state space
     network for monocular 2D-to-3D pose lifting that models joint and frame
     dependencies at linear cost in the number of spatio-temporal tokens,
     answering Problems 1 and 2 of
     Section~\ref{sec:intro-problem-statement}.
 
-  \item \textbf{The breadth-first search kinematic-tree scan order}, a
-    deterministic, parameter-free ordering of the skeleton's joints along the
-    spatial scan, taken in the root-to-extremity direction of the body's
-    kinematic tree \cite{loper2015smpl}. This is the thesis's answer to
-    Problem 3 and its central contribution, and it differs from both the
-    fixed index orders and the learned scan groupings
+  \item \textbf{The breadth-first search (BFS) kinematic-tree scan order}, an
+    ordering of the skeleton's joints along the spatial scan taken in the
+    root-to-extremity direction of the body's kinematic tree
+    \cite{loper2015smpl}. This is the thesis's answer to Problem 3, and it
+    differs from both the fixed index orders and the learned scan groupings
     \cite{nguyen2025skeletonmamba} used by prior state-space pose estimators.
 
-  \item \textbf{A controlled scan-order ablation} that holds the architecture
-    and training configuration fixed and varies only the spatial scan order,
-    so that any change in accuracy can be attributed to the scan order itself
-    rather than to other differences between methods.
+  \item \textbf{An anatomy-aware bone-length loss} that supervises the lengths
+    and temporal consistency of the skeleton's bones and is paired with the
+    BFS scan, so that the scan order and the training objective reinforce the
+    same skeletal structure.
 
-  \item \textbf{An efficiency-tier evaluation} that places KinecMamba, at
-    roughly 1.26 million parameters, alongside the smallest state-space
-    baselines in the field \cite{huang2025posemamba, cui2025sasmamba} on
-    Human3.6M and MPI-INF-3DHP.
-\end{itemize}
+  \item \textbf{An empirical study on Human3.6M and MPI-INF-3DHP}, including a
+    controlled scan-order ablation that holds the architecture and training
+    configuration fixed and varies only the spatial scan order, so that any
+    change can be attributed to the scan order itself.
+\end{enumerate}
 
 \section{Limitations and Scope}
 \label{sec:intro-limitations}

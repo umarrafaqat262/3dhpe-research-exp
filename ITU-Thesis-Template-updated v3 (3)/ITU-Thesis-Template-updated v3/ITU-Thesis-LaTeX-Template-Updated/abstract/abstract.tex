@@ -38,12 +38,12 @@ of local structure. This thesis presents KinecMamba, a bidirectional spatio-temp
 state space network for 2D-to-3D pose lifting. It preserves the linear cost of Mamba
 through a four-directional cross-scan over the frame and joint axes, and orders the
 joints along the spatial scan by a breadth-first traversal of the skeleton's
-kinematic tree, from the pelvis outward along each limb. The traversal is fixed,
-deterministic, and adds no parameters. KinecMamba holds about 1.26 million parameters
-and is evaluated on Human3.6M and MPI-INF-3DHP against Transformer- and
-state-space-based methods, with an ablation that isolates the scan order from the
-rest of the network. The from-scratch training run is still in progress, so final
-accuracy figures are reported as pending.
+kinematic tree, from the pelvis outward along each limb. An anatomy-aware
+bone-length loss supervises the lengths and temporal consistency of the
+skeleton's bones, reinforcing the same structure the scan follows. KinecMamba
+is evaluated on Human3.6M and MPI-INF-3DHP against Transformer- and
+state-space-based methods, with an ablation that isolates the scan order from
+the rest of the network.
 
 \end{document}
 

@@ -148,6 +148,22 @@ capacity, the closest point of comparison is PoseMamba-S in the same tier;
 Section~\ref{sec:results-ablation} describes the ablation that will
 attribute any difference from that baseline to the BFS kinematic-tree scan
 itself, rather than to other differences in training configuration.
+Figure~\ref{fig:results-plot} summarizes this accuracy-versus-size comparison.
+
+\begin{figure}[t]
+\centering
+% Place the plot at figures/results_plot.pdf and uncomment the next line
+% (remove the placeholder box below):
+% \includegraphics[width=0.8\textwidth]{figures/results_plot.pdf}
+\fbox{\parbox[c][5cm][c]{0.8\textwidth}{\centering\textit{[Results plot:
+  insert \texttt{figures/results\_plot.pdf} showing accuracy (MPJPE, lower is better)
+  against model size for the compared methods on Human3.6M, with KinecMamba
+  highlighted.]}}}
+\caption[Accuracy versus model size on Human3.6M.]{Accuracy (MPJPE) against
+  model size on Human3.6M for the compared methods and KinecMamba. Values are
+  inserted once the training run completes.}
+\label{fig:results-plot}
+\end{figure}
 
 \section{Results on MPI-INF-3DHP}
 \label{sec:results-mpiinf3dhp}

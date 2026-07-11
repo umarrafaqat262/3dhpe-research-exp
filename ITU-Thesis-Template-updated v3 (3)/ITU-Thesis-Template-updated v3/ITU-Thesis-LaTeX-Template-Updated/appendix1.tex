@@ -1,33 +1,47 @@
 \setlength{\footskip}{8mm}
 
-% NOTE: NEED TO DO EVERYTHING SUCH AS SECTION NUMBER OR FIGURE NUMBER 
-% MANUALLY IN THIS CHAPTER.
-
 \renewcommand{\thefigure}{A.\arabic{figure}}
+\renewcommand{\thetable}{A.\arabic{table}}
 
 \begin{center}
-{\large \bf Appendix A\\ \vskip 1em .. TITLE HERE ..\\ \vskip 1em}
+{\large \bf Appendix A\\ \vskip 1em Kinematic Tree and BFS Scan Order\\ \vskip 1em}
 \vskip 1em
 \end{center}
 
 \FloatBarrier
 
 \singlespace
- 
-{\bf Section Name} \\ 
 
-Figure~\ref{fig:monitoring-test} shows something. 
+This appendix lists the 17-joint Human3.6M skeleton used throughout the thesis
+(Section~\ref{sec:method-problem}) and the breadth-first search (BFS) scan order
+derived from it (Section~\ref{sec:method-bfs}).
 
-Some text ..
+\vskip 1em
+{\bf Joints.} The 17 joints are indexed as: 0 pelvis, 1 right hip, 2 right knee,
+3 right ankle, 4 left hip, 5 left knee, 6 left ankle, 7 spine, 8 thorax, 9 neck,
+10 head, 11 left shoulder, 12 left elbow, 13 left wrist, 14 right shoulder,
+15 right elbow, 16 right wrist.
 
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=5in]{figures/monitoring}
-  \caption[CCTV monitoring room in Appendix A.]{\small CCTV monitoring
-    room. Reprinted from the Twenty First Security Web site
-    (\url{http://www.twentyfirstsecurity.com.au/}).}
-  \label{fig:monitoring-test}
-\end{figure}
+\vskip 1em
+{\bf Bones (kinematic-tree edges).} The 16 parent-child bones, rooted at the pelvis
+(joint 0), grouped by chain:
+
+\begin{itemize}
+  \item Right leg: $0\rightarrow1\rightarrow2\rightarrow3$
+  \item Left leg: $0\rightarrow4\rightarrow5\rightarrow6$
+  \item Spine and head: $0\rightarrow7\rightarrow8\rightarrow9\rightarrow10$
+  \item Left arm: $8\rightarrow11\rightarrow12\rightarrow13$
+  \item Right arm: $8\rightarrow14\rightarrow15\rightarrow16$
+\end{itemize}
+
+\vskip 1em
+{\bf BFS scan order.} Visiting joints outward from the pelvis, level by level, and
+breaking ties by ascending joint index, gives the order
+\[
+\pi = [\,0,\ 1,\ 4,\ 7,\ 2,\ 5,\ 8,\ 3,\ 6,\ 9,\ 11,\ 14,\ 10,\ 12,\ 15,\ 13,\ 16\,].
+\]
+The BiSTSSM layer reindexes the joint axis by $\pi$ before the spatial scan and applies
+the inverse permutation after the cross-merge, as described in
+Section~\ref{sec:method-bfs}.
 
 \FloatBarrier
-

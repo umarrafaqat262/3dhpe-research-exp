@@ -19,17 +19,17 @@ architecture for this task, built around a four-directional cross-scan
 selective state space layer (Section~\ref{sec:method-bistssm}), and
 introduced this thesis's central contribution: a breadth-first search
 kinematic-tree scan order (Section~\ref{sec:method-bfs}) that replaces
-the naive joint-index order with a deterministic traversal derived
-directly from the skeleton's parent-child hierarchy, adding no learned
-parameters. Chapter~\ref{ch:results} set out the evaluation of
-KinecMamba on Human3.6M at approximately 1.26M parameters, which places
-it in the same efficiency tier as the smallest baselines
-compared against, namely PoseMamba-S and SasMamba. Its accuracy
-on the benchmark depends on a from-scratch training run that had not
-finished when this chapter was written, so the P1 and P2 figures are
-reported as pending rather than final. PoseMamba-S, the closest baseline
-in both architecture and parameter budget, is the reference point for that
-comparison once it completes.
+the naive joint-index order with a traversal derived directly from the
+skeleton's parent-child hierarchy, together with an anatomy-aware
+bone-length loss that reinforces the same skeletal structure.
+Chapter~\ref{ch:results} set out the evaluation of KinecMamba on Human3.6M,
+which places it in the same efficiency tier as the smallest baselines
+compared against, namely PoseMamba-S and SasMamba. Its accuracy on the
+benchmark, the MPI-INF-3DHP evaluation, and the scan-order ablation depend
+on training runs that had not finished when this chapter was written, so
+those figures are reported as pending rather than final. PoseMamba-S, the
+closest baseline in both architecture and parameter budget, is the reference
+point for that comparison once it completes.
 
 Whether the final numbers will support the thesis's motivating
 hypothesis, that a scan order derived from the skeleton's kinematic tree
@@ -72,7 +72,7 @@ The following work is recommended to complete and extend this thesis:
     \cite{zhang2024kmm}.
 
   \item \textbf{Explore hybrid fixed/learned scan orders.} The BFS scan
-    order is entirely fixed and parameter-free
+    order is fixed by the skeleton's kinematic tree
     (Section~\ref{sec:method-bfs}), while methods such as
     \cite{nguyen2025skeletonmamba} learn scan groupings from data. A
     natural extension is a hybrid approach that initializes a learned scan

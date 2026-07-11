@@ -21,7 +21,7 @@
 \vskip 2em
 {
   \lineskip 1.5em
-  \begin{tabular}[t]{c} by\\ \\ % [PLACEHOLDER — fill author name before submission]
+  \begin{tabular}[t]{c} by\\ \\ Umar Rafaqat\\[0.3em] Student ID: MSDS24068
   \end{tabular}\par
 }
 \vskip 5.6em
@@ -29,7 +29,7 @@
 \vskip 3.5em
 \singlespace A thesis submitted in partial fulfillment of the
 requirements for the\\ degree of Master of Science in\\
-Computer Science
+Data Science % verify: degree/program
 
 	\vskip 5em
 \vskip 0.5em
@@ -38,13 +38,10 @@ Computer Science
  \begin{center}
    \begin{tabular}{rl}
      \\[-1em]
-    Examination Committee: & Dr.\ [PLACEHOLDER — Advisor] (Chairperson) \\[-0.8em]
-                           & Dr.\ [PLACEHOLDER — Committee Member \#1] \\[-0.8em]
-                           & Dr.\ [PLACEHOLDER — Committee Member \#2] \\\\
-
-%     Nationality:     & [PLACEHOLDER] \\[-0.8em]
-%     Previous Degree: & [PLACEHOLDER]\\[-0.8em]
-%     \\
+    Supervisor: & Dr.\ Mehwish Ghafoor \\[-0.8em]
+                & \\[-0.8em]
+    Examination Committee: & Dr.\ [PLACEHOLDER: Committee Member \#1] \\[-0.8em]
+                           & Dr.\ [PLACEHOLDER: Committee Member \#2] \\\\
    \end{tabular}
  \end{center}
 
@@ -54,9 +51,30 @@ Computer Science
 }
 \end{center}
 \begin{center}
-  \singlespace % [PLACEHOLDER — Institution / School]\\ Month Year
+  \singlespace Information Technology University (ITU), Lahore\\ % verify institution
+  Month Year % verify submission date
 \end{center}
 \vfill
+
+%====================== DECLARATION ======================
+\newpage
+\pagestyle{plain}
+\addcontentsline{toc}{section}{Declaration}
+\begin{center}
+{\large \bf Declaration\\ \vskip 1em}
+\end{center}
+\singlespace
+\vspace{1em}
+
+\noindent I, Umar Rafaqat (Student ID: MSDS24068), declare that this thesis titled
+``KinecMamba: Anatomy-Aware 3D Human Pose Estimation using Mamba'' and the work
+presented in it are my own. This work was carried out under the supervision of
+Dr.\ Mehwish Ghafoor at Information Technology University (ITU), Lahore. Where I have
+drawn on the work of others, it has been cited and acknowledged. This thesis has not
+been submitted for any other degree.
+
+\vskip 4em
+\noindent Signature: \underline{\hspace{5cm}} \hfill Date: \underline{\hspace{3.5cm}}
 
 %====================== ACKNOWLEDGEMENTS ======================
 \newpage
@@ -76,7 +94,10 @@ Computer Science
 \hspace{8.5mm}
 \vspace{-1em}
 
-Write your touching message here..
+\noindent I am grateful to my supervisor, Dr.\ Mehwish Ghafoor, for her guidance and
+support throughout this work. I thank the faculty of Information Technology University
+(ITU), Lahore for the resources and environment that made this research possible, and
+my family and colleagues for their encouragement.
 
 %======================= Table of Contents =========================
 \newpage
@@ -138,11 +159,11 @@ thesis presents KinecMamba, a bidirectional spatio-temporal state space network 
 2D-to-3D pose lifting. It preserves the linear cost of Mamba through a
 four-directional cross-scan over the frame and joint axes, and orders the joints
 along the spatial scan by a breadth-first traversal of the skeleton's kinematic tree,
-from the pelvis outward along each limb. The traversal is fixed, deterministic, and
-adds no parameters. KinecMamba holds about 1.26 million parameters and is evaluated on
-Human3.6M and MPI-INF-3DHP against Transformer- and state-space-based methods, with an
-ablation that isolates the scan order from the rest of the network. The from-scratch
-training run is still in progress, so final accuracy figures are reported as pending.
+from the pelvis outward along each limb. An anatomy-aware bone-length loss supervises
+the lengths and temporal consistency of the skeleton's bones, reinforcing the same
+structure the scan follows. KinecMamba is evaluated on Human3.6M and MPI-INF-3DHP
+against Transformer- and state-space-based methods, with an ablation that isolates the
+scan order from the rest of the network.
 
 \setlength{\parskip}{0pt}
 
