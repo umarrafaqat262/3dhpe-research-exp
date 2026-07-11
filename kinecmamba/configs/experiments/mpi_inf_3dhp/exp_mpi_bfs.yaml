@@ -1,0 +1,85 @@
+# KinecMamba on MPI-INF-3DHP with BFS kinematic scan.
+#
+# Recipe follows the verified P-STMO 3DHP protocol: 81-frame window, GT 2D input
+# (in_channels=2 / no_conf), seq2seq (predict all T frames), effective batch ~160,
+# lr 7e-4 with 0.97 exponential decay. Consumed by train_mpi.py (NOT train.py).
+#
+# Train:
+#   python train_mpi.py --config configs/experiments/mpi_inf_3dhp/exp_mpi_bfs.yaml -c checkpoint/mpi_bfs
+# Eval only (writes <ckpt-dir>/inference_data.mat for the official MATLAB scorer):
+#   python train_mpi.py --config configs/experiments/mpi_inf_3dhp/exp_mpi_bfs.yaml -e <path>/best_epoch.bin -c checkpoint/mpi_bfs_eval
+
+# General
+train_2d: False
+no_eval: False
+finetune: False           # train from scratch on 3DHP (no H36M warm start here)
+partial_train: null
+
+# Training
+epochs: 60
+checkpoint_frequency: 5
+batch_size: 20            # 20 x accum 8 = effective 160 (P-STMO effective batch ~160)
+accum_steps: 8
+dropout: 0.0
+learning_rate: 0.0007     # 7e-4 per P-STMO 3DHP recipe
+weight_decay: 0.01
+lr_decay: 0.97            # exponential per-epoch decay per P-STMO
+lr_scheduler: exponential
+warmup_epochs: 0
+grad_clip_norm: 1.0
+
+# EMA
+use_ema: True
+ema_decay: 0.999
+
+# Model — matches the H36M BFS config; BFS scan order is switched to MPI joints
+# at runtime by train_mpi.py (csms6s.set_bfs_order('mpi')).
+backbone: "PoseMamba"
+maxlen: 243               # positional-embed capacity; clips are clip_len (81) long
+dim_feat: 64
+mlp_ratio: 2
+depth: 10
+att_fuse: True
+input_channels: 2         # GT 2D input, no confidence channel
+use_ssi: False
+use_msm: False
+use_hypergcn: False
+use_gat_head: False
+forward_type: v2_bfs
+
+# Data — VERIFY the npz filenames and internal structure against the actual files.
+data_root: data/motion3d/mpi_inf_3dhp/
+train_file: data_train_3dhp.npz     # dict keyed by (subject, seq); value[0][cam]{'data_3d','data_2d'}
+test_file: data_test_3dhp.npz       # dict keyed by 'TS1'..'TS6'; value{'data_3d','data_2d','valid'}
+num_joints: 17
+clip_len: 81              # P-STMO input window f=81
+data_stride: 81           # non-overlapping training clips
+rootrel: True             # 3D is root-relative around joint 14 (dataset zeroes root)
+sample_stride: 1
+no_conf: True             # slice input to first 2 channels (GT 2D)
+gt_2d: False
+
+# Loss — 3D + scale + velocity + temporal-smoothness + anatomy-aware bone losses.
+# Bone losses use the MPI limb table (loss.py loss_limb_gt_mpi / loss_limb_var_mpi,
+# wired in train_mpi.py) built from the true MPI-INF-3DHP skeleton (root joint 14),
+# so they stay anatomically meaningful on this dataset.
+lambda_3d: 1.0
+lambda_3d_velocity: 20.0
+lambda_scale: 0.5
+lambda_lg: 0.5            # bone-length L1 vs GT (loss_limb_gt)
+lambda_lv: 1.0            # bone-length temporal variance (loss_limb_var)
+lambda_diff: 0.5          # temporal-smoothness term
+lambda_a: 0.0
+lambda_av: 0.0
+lambda_3dw: 0.0
+
+# Augmentation
+synthetic: False
+flip: True                # random flip in training + flip-TTA at eval (MPI joint groups)
+mask_ratio: 0.
+mask_T_ratio: 0.
+noise: False
+
+# Wandb
+wandb_project: PoseMamba-mpi
+wandb_entity: msds24068-itu-lahore
