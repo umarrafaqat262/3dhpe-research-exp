@@ -80,14 +80,42 @@ proposed scan order.
 
 \begin{figure}[t]
 \centering
-% Kinematic-tree figure: place the rendered image at figures/kinematic_tree.pdf and
-% uncomment the \includegraphics line below (remove the placeholder box). The image is
-% generated from figure_prompts.md (Figure 2, full-body skeleton kinematic tree).
-% \includegraphics[width=0.85\textwidth]{figures/kinematic_tree.pdf}
-\fbox{\parbox[c][6cm][c]{0.85\textwidth}{\centering\textit{[Kinematic-tree figure:
-  insert \texttt{figures/kinematic\_tree.pdf}. The 17-joint Human3.6M skeleton as a
-  rooted tree, pelvis (0) as root, 16 parent-child bones; each joint labelled with its
-  index and name.]}}}
+\begin{tikzpicture}[
+  joint/.style={draw, rounded corners, fill=white, minimum width=2.1cm,
+    minimum height=0.7cm, font=\footnotesize, align=center},
+  root/.style={joint, fill=black!12, thick},
+  bone/.style={-, thick}
+]
+ \node[root] (n0)  at (0,0)      {0: Pelvis};
+
+ \node[joint] (n1)  at (-3.2,-1.4)  {1: R.\ Hip};
+ \node[joint] (n7)  at (0,-1.4)     {7: Spine};
+ \node[joint] (n4)  at (3.2,-1.4)   {4: L.\ Hip};
+
+ \node[joint] (n2)  at (-3.2,-2.8)  {2: R.\ Knee};
+ \node[joint] (n8)  at (0,-2.8)     {8: Thorax};
+ \node[joint] (n5)  at (3.2,-2.8)   {5: L.\ Knee};
+
+ \node[joint] (n3)  at (-3.2,-4.2)  {3: R.\ Ankle};
+ \node[joint] (n14) at (-1.6,-4.2)  {14: R.\ Shoulder};
+ \node[joint] (n9)  at (0,-4.2)     {9: Neck};
+ \node[joint] (n11) at (1.6,-4.2)   {11: L.\ Shoulder};
+ \node[joint] (n6)  at (3.2,-4.2)   {6: L.\ Ankle};
+
+ \node[joint] (n15) at (-2.6,-5.6)  {15: R.\ Elbow};
+ \node[joint] (n10) at (0,-5.6)     {10: Head};
+ \node[joint] (n12) at (2.6,-5.6)   {12: L.\ Elbow};
+
+ \node[joint] (n16) at (-2.6,-7.0)  {16: R.\ Wrist};
+ \node[joint] (n13) at (2.6,-7.0)   {13: L.\ Wrist};
+
+ \draw[bone] (n0) -- (n1);  \draw[bone] (n1) -- (n2);  \draw[bone] (n2) -- (n3);
+ \draw[bone] (n0) -- (n4);  \draw[bone] (n4) -- (n5);  \draw[bone] (n5) -- (n6);
+ \draw[bone] (n0) -- (n7);  \draw[bone] (n7) -- (n8);
+ \draw[bone] (n8) -- (n9);  \draw[bone] (n9) -- (n10);
+ \draw[bone] (n8) -- (n11); \draw[bone] (n11) -- (n12); \draw[bone] (n12) -- (n13);
+ \draw[bone] (n8) -- (n14); \draw[bone] (n14) -- (n15); \draw[bone] (n15) -- (n16);
+\end{tikzpicture}
 \caption[The Human3.6M skeleton as a rooted kinematic tree.]{The 17-joint
   Human3.6M skeleton, represented as a rooted kinematic tree $G=(V,E)$
   with the pelvis (joint 0) as root and 16 parent-child bone edges. The
@@ -193,15 +221,35 @@ Z^{(20)} \in \mathbb{R}^{B,T,J,C}
 
 \begin{figure}[t]
 \centering
-% Architecture figure: place the rendered image at figures/architecture.pdf and
-% uncomment the \includegraphics line below (remove the placeholder box). The image
-% is generated from figure_prompts.md (Figure 1).
-% \includegraphics[width=\textwidth]{figures/architecture.pdf}
-\fbox{\parbox[c][5.5cm][c]{0.92\textwidth}{\centering\textit{[Architecture
-  diagram: insert \texttt{figures/architecture.pdf}. 2D-pose input
-  $(B,T,J,2)$ $\rightarrow$ STE $\rightarrow$ TTE $\rightarrow$ $\times$10
-  Spatial/Temporal BiSTSSM backbone (20 blocks) $\rightarrow$ output head
-  (LayerNorm, Linear $C{\to}3$) $\rightarrow$ 3D-pose output $(B,T,J,3)$.]}}}
+\begin{tikzpicture}[
+  block/.style={draw, rounded corners, fill=white, minimum width=7.2cm,
+    minimum height=0.9cm, font=\footnotesize, align=center},
+  stage/.style={draw, rounded corners, fill=black!5, minimum width=6cm,
+    minimum height=0.8cm, font=\scriptsize, align=center},
+  arr/.style={-{Latex[length=2.2mm]}, thick}
+]
+ \node[block] (input) at (0,0)     {Input $X \in \mathbb{R}^{B,T,J,2}$};
+ \node[block] (ste)   at (0,-1.3)  {Spatial Token Embedding (STE)\\ $\mathrm{Linear}(2{\to}C)$ + spatial positional embedding};
+ \node[block] (tte)   at (0,-2.9)  {Temporal Token Embedding (TTE)\\ $+$ temporal positional embedding};
+
+ \node[stage] (sp) at (0,-4.6) {Spatial BiSTSSMBlock};
+ \node[stage] (tp) at (0,-5.5) {Temporal BiSTSSMBlock};
+
+ \begin{scope}[on background layer]
+   \node[draw, dashed, rounded corners, fit=(sp)(tp), inner sep=6pt,
+     label={[font=\footnotesize]above right:$\times\, 10$}] (loopbox) {};
+ \end{scope}
+
+ \node[block] (head)   at (0,-7.3) {Output head\\ $\mathrm{LayerNorm} \to \mathrm{Linear}(C{\to}3)$};
+ \node[block] (output) at (0,-8.6) {Output $\hat{Y} \in \mathbb{R}^{B,T,J,3}$};
+
+ \draw[arr] (input) -- (ste);
+ \draw[arr] (ste) -- (tte);
+ \draw[arr] (tte) -- (loopbox.north);
+ \draw[arr] (sp) -- (tp);
+ \draw[arr] (loopbox.south) -- (head);
+ \draw[arr] (head) -- (output);
+\end{tikzpicture}
 \caption[End-to-end architecture pipeline.]{End-to-end architecture
   pipeline. The input 2D keypoint sequence is embedded by the STE and TTE
   (Section~\ref{sec:method-embedding}), processed by 10 repetitions of a
@@ -290,15 +338,37 @@ summarizes this pipeline.
 
 \begin{figure}[t]
 \centering
-% BiSTSSM-layer figure: place the rendered image at figures/bistssm_layer.pdf and
-% uncomment the \includegraphics line below (remove the placeholder box). The image is
-% generated from figure_prompts.md (Figure 3, BiSTSSM layer internals).
-% \includegraphics[width=0.6\textwidth]{figures/bistssm_layer.pdf}
-\fbox{\parbox[c][6cm][c]{0.6\textwidth}{\centering\textit{[BiSTSSM-layer figure: insert
-  \texttt{figures/bistssm\_layer.pdf}. Vertical pipeline: input $Z$ (post-LayerNorm)
-  $\rightarrow$ four-directional cross-scan $\rightarrow$ $\times$4 (input projection
-  $C{\to}2C$, depthwise Conv1D k=3, selective SSM with $N{=}16$) $\rightarrow$ cross-merge
-  $\rightarrow$ output projection $2C{\to}C$ $\rightarrow$ output $O$.]}}}
+\begin{tikzpicture}[
+  block/.style={draw, rounded corners, fill=white, minimum width=7.4cm,
+    minimum height=0.8cm, font=\footnotesize, align=center},
+  stage/.style={draw, rounded corners, fill=black!5, minimum width=6.2cm,
+    minimum height=0.75cm, font=\scriptsize, align=center},
+  arr/.style={-{Latex[length=2.2mm]}, thick}
+]
+ \node[block] (in)   at (0,0)     {Input $Z \in \mathbb{R}^{T,J,C}$ (post-LayerNorm)};
+ \node[block] (scan) at (0,-1.3)  {Four-directional cross-scan\\ unfold $T\times J$ grid into 4 sequences};
+
+ \node[stage] (proj1) at (0,-2.8) {Input projection: $\mathrm{Linear}(C{\to}2C)$};
+ \node[stage] (conv)  at (0,-3.7) {Depthwise Conv1D (kernel $=3$)};
+ \node[stage] (ssm)   at (0,-5.0) {Selective SSM: project $\Delta, B, C$;\\ scan with learned $A \in \mathbb{R}^{N\times N}$};
+
+ \begin{scope}[on background layer]
+   \node[draw, dashed, rounded corners, fit=(proj1)(conv)(ssm), inner sep=6pt,
+     label={[font=\footnotesize]above right:$\times\,4$ (one per direction)}] (loopbox) {};
+ \end{scope}
+
+ \node[block] (merge) at (0,-6.8) {Cross-merge: recombine 4 directional outputs};
+ \node[block] (proj2) at (0,-8.1) {Output projection: $\mathrm{Linear}(2C{\to}C)$};
+ \node[block] (out)   at (0,-9.3) {Output $O \in \mathbb{R}^{T,J,C}$};
+
+ \draw[arr] (in) -- (scan);
+ \draw[arr] (scan) -- (loopbox.north);
+ \draw[arr] (proj1) -- (conv);
+ \draw[arr] (conv) -- (ssm);
+ \draw[arr] (loopbox.south) -- (merge);
+ \draw[arr] (merge) -- (proj2);
+ \draw[arr] (proj2) -- (out);
+\end{tikzpicture}
 \caption[The BiSTSSM layer.]{The BiSTSSM layer: the $T\times J$ token
   grid is unfolded into four directional sequences, each independently
   projected, convolved, and processed by a selective state space model,
@@ -424,15 +494,27 @@ scan-adjacent joints are also kinematically close.
 
 \begin{figure}[t]
 \centering
-% Scan-order figure: place the rendered image at figures/scan_order.pdf and uncomment
-% the \includegraphics line below (remove the placeholder box). The image is generated
-% from figure_prompts.md (Figure 4, naive vs BFS scan order).
-% \includegraphics[width=\textwidth]{figures/scan_order.pdf}
-\fbox{\parbox[c][3.5cm][c]{0.95\textwidth}{\centering\textit{[Scan-order figure: insert
-  \texttt{figures/scan\_order.pdf}. Two strips of 17 joint cells: a top ``naive index
-  order'' strip (0..16) and a bottom ``BFS kinematic order'' strip
-  (0,1,4,7,2,5,8,3,6,9,11,14,10,12,15,13,16), showing that the BFS order keeps
-  kinematically close joints adjacent.]}}}
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+  jointbox/.style={draw, rounded corners, fill=white, minimum width=0.95cm,
+    minimum height=0.7cm, font=\scriptsize, align=center},
+  rowlabel/.style={font=\footnotesize, align=right}
+]
+ \node[rowlabel] at (-1.7,0) {Naive index order:};
+ \foreach \i/\lbl [count=\c from 0] in
+   {0/Pel,1/RHp,2/RKn,3/RAn,4/LHp,5/LKn,6/LAn,7/Spn,8/Thx,9/Nck,10/Hd,
+    11/LSh,12/LEl,13/LWr,14/RSh,15/REl,16/RWr} {
+   \node[jointbox] at (\c*1.05,0) {\lbl$_{\i}$};
+ }
+
+ \node[rowlabel] at (-1.7,-1.3) {Proposed BFS order:};
+ \foreach \i/\lbl [count=\c from 0] in
+   {0/Pel,1/RHp,4/LHp,7/Spn,2/RKn,5/LKn,8/Thx,3/RAn,6/LAn,9/Nck,
+    11/LSh,14/RSh,10/Hd,12/LEl,15/REl,13/LWr,16/RWr} {
+   \node[jointbox, fill=black!8] at (\c*1.05,-1.3) {\lbl$_{\i}$};
+ }
+\end{tikzpicture}%
+}
 \caption[Naive vs.\ BFS kinematic-tree scan order.]{The 17 joints
   (abbreviated names, subscript = joint index, as defined in
   Figure~\ref{fig:kinematic-tree}) under the naive index order used by

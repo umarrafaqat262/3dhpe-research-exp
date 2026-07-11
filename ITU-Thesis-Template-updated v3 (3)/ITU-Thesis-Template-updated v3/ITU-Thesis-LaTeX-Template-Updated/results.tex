@@ -148,20 +148,36 @@ capacity, the closest point of comparison is PoseMamba-S in the same tier;
 Section~\ref{sec:results-ablation} describes the ablation that will
 attribute any difference from that baseline to the BFS kinematic-tree scan
 itself, rather than to other differences in training configuration.
-Figure~\ref{fig:results-plot} summarizes this accuracy-versus-size comparison.
+Figure~\ref{fig:results-plot} plots accuracy against model size for these
+baselines.
 
 \begin{figure}[t]
 \centering
-% Place the plot at figures/results_plot.pdf and uncomment the next line
-% (remove the placeholder box below):
-% \includegraphics[width=0.8\textwidth]{figures/results_plot.pdf}
-\fbox{\parbox[c][5cm][c]{0.8\textwidth}{\centering\textit{[Results plot:
-  insert \texttt{figures/results\_plot.pdf} showing accuracy (MPJPE, lower is better)
-  against model size for the compared methods on Human3.6M, with KinecMamba
-  highlighted.]}}}
-\caption[Accuracy versus model size on Human3.6M.]{Accuracy (MPJPE) against
-  model size on Human3.6M for the compared methods and KinecMamba. Values are
-  inserted once the training run completes.}
+\begin{tikzpicture}
+\begin{axis}[
+  width=0.85\textwidth, height=0.5\textwidth,
+  xlabel={Parameters (M)}, ylabel={MPJPE (mm)},
+  xmode=log, log basis x=10,
+  xmin=0.4, xmax=60, ymin=36, ymax=43,
+  grid=both, grid style={gray!20},
+  tick label style={font=\footnotesize},
+  label style={font=\small},
+  nodes near coords style={font=\scriptsize},
+]
+% Baseline points: (params in M, MPJPE mm) from Table~\ref{tab:h36m-sota}
+\addplot[only marks, mark=*, mark size=2pt, color=blue!55] coordinates {
+  (33.6,40.9) (4.7,41.0) (42.3,39.2) (19.0,38.4) (14.4,37.5)
+  (0.9,41.8) (6.7,38.1) (0.64,41.48) (4.1,39.77)
+};
+% KinecMamba (ours): fill in the measured MPJPE, then uncomment.
+% \addplot[only marks, mark=star, mark size=4pt, color=orange!85!black]
+%   coordinates { (1.26, <TODO: MPJPE>) };  % KinecMamba (ours)
+\end{axis}
+\end{tikzpicture}
+\caption[Accuracy versus model size on Human3.6M.]{Accuracy (MPJPE, lower is
+  better) against model size for the baselines of Table~\ref{tab:h36m-sota} on
+  Human3.6M. KinecMamba is added at its measured MPJPE once the training run
+  completes.}
 \label{fig:results-plot}
 \end{figure}
 
