@@ -17,8 +17,8 @@ Section~\ref{sec:results-protocol} describes the benchmark datasets and
 the evaluation metrics used throughout this chapter.
 Section~\ref{sec:results-implementation} summarizes the implementation
 configuration. Section~\ref{sec:results-h36m} sets out the main comparison
-of this thesis, placing the proposed method against established baselines
-on Human3.6M that span the Transformer, graph, and state-space families.
+of this thesis, placing KinecMamba against established baselines
+on Human3.6M that span the Transformer and state-space families.
 Section~\ref{sec:results-mpiinf3dhp} and Section~\ref{sec:results-ablation}
 cover the MPI-INF-3DHP benchmark and the scan-order ablation study
 motivated in Section~\ref{sec:intro-objectives}. The from-scratch training
@@ -93,13 +93,15 @@ finalized for reporting and will be completed before submission.}
 \section{Comparison with the State of the Art on Human3.6M}
 \label{sec:results-h36m}
 
-Table~\ref{tab:h36m-sota} places the proposed method alongside
-representative baselines from Chapter~\ref{ch:literature-review}, using
-each baseline's officially reported P1/P2 figures under the protocol
-defined in Section~\ref{sec:results-protocol}. The accuracy of the
-proposed method depends on its from-scratch training run, which has not
-yet finished, so its P1 and P2 entries in the table are marked pending and
-will be filled in once that run completes.
+Table~\ref{tab:h36m-sota} places KinecMamba alongside
+representative recent baselines from Chapter~\ref{ch:literature-review},
+using each baseline's officially reported P1/P2 figures under the protocol
+defined in Section~\ref{sec:results-protocol}. To keep the comparison against
+current methods, the table lists baselines at or below PoseMamba's reported
+error; older and weaker entries are omitted. The accuracy of KinecMamba
+depends on its from-scratch training run, which has not yet finished, so its
+P1 and P2 entries in the table are marked pending and will be filled in once
+that run completes.
 
 \begin{table}[t]
 \centering
@@ -107,7 +109,7 @@ will be filled in once that run completes.
   with the state of the art on Human3.6M under the detected-2D input
   setting. $T$: number of input frames. Params/MACs are as officially
   reported by each method; ``n/r'' denotes a value not reported in the
-  cited source, and ``TBD'' marks the proposed method's pending result.
+  cited source, and ``TBD'' marks KinecMamba's pending result.
   P1: MPJPE (mm). P2: P-MPJPE (mm).}
 \label{tab:h36m-sota}
 \resizebox{\textwidth}{!}{%
@@ -115,28 +117,28 @@ will be filled in once that run completes.
 \hline
 Method & Venue & $T$ & Params (M) & MACs (G) & P1 $\downarrow$ & P2 $\downarrow$ \\
 \hline
-MHFormer \cite{li2022mhformer}            & CVPR'22  & 351 & 30.9 & 7.0   & 43.0  & 34.4 \\
-PoseFormerV2 \cite{zhao2023poseformerv2}  & CVPR'23  & 243 & 14.4 & 4.8   & 45.2  & 35.6 \\
-GLA-GCN \cite{yu2023glagcn}               & ICCV'23  & 243 & 1.3  & 1.5   & 44.4  & 34.8 \\
+\multicolumn{7}{l}{\textit{Transformer-based}} \\
 MixSTE \cite{zhang2022mixste}             & CVPR'22  & 243 & 33.6 & 139.0 & 40.9  & 32.6 \\
 STCFormer \cite{tang2023stcformer}        & CVPR'23  & 243 & 4.7  & 19.6  & 41.0  & 32.0 \\
 MotionBERT \cite{zhu2023motionbert}       & ICCV'23  & 243 & 42.3 & 174.8 & 39.2  & 32.9 \\
 MotionAGFormer-L \cite{mehraban2024motionagformer} & WACV'24 & 243 & 19.0 & 78.3 & 38.4 & 32.5 \\
-Pose Magic \cite{zhang2024posemagic}      & 2024     & 243 & 14.4 & 40.6  & 37.5  & n/r \\
+\hline
+\multicolumn{7}{l}{\textit{State-space-based}} \\
+Pose Magic \cite{zhang2024posemagic}      & 2024     & 243 & 14.4 & 40.6  & 37.5  & 31.8 \\
 PoseMamba-S \cite{huang2025posemamba}     & AAAI'25  & 243 & 0.9  & 3.6   & 41.8  & 35.0 \\
 PoseMamba-L \cite{huang2025posemamba}     & AAAI'25  & 243 & 6.7  & 27.9  & 38.1  & 32.5 \\
 SasMamba \cite{cui2025sasmamba}           & WACV'26  & 243 & 0.64 & 1.3   & 41.48 & 34.84 \\
 SasMamba-large \cite{cui2025sasmamba}     & WACV'26  & 243 & 4.1  & 8.56  & 39.77 & 33.61 \\
 \hline
-\textbf{Ours} & This work & 243 & \textbf{1.26} & n/r & \textbf{TBD} & \textbf{TBD} \\
+\textbf{KinecMamba (ours)} & This work & 243 & \textbf{1.26} & n/r & \textbf{TBD} & \textbf{TBD} \\
 \hline
 \end{tabular}%
 }
 \end{table}
 
-At approximately 1.26M parameters, the proposed method sits in the same
+At approximately 1.26M parameters, KinecMamba sits in the same
 efficiency tier as the smallest baselines in Table~\ref{tab:h36m-sota},
-alongside PoseMamba-S (0.9M), SasMamba (0.64M), and GLA-GCN (1.3M), rather
+alongside PoseMamba-S (0.9M) and SasMamba (0.64M), rather
 than the large-model tier of MotionBERT, MotionAGFormer-L, or Pose Magic.
 Its accuracy relative to these baselines will be assessed once the
 from-scratch training run completes and the pending P1 and P2 entries in
@@ -151,11 +153,11 @@ itself, rather than to other differences in training configuration.
 \label{sec:results-mpiinf3dhp}
 
 Section~\ref{sec:intro-objectives} committed this thesis to evaluating
-the proposed architecture on MPI-INF-3DHP \cite{mehta2017mpiinf3dhp} in
+KinecMamba on MPI-INF-3DHP \cite{mehta2017mpiinf3dhp} in
 addition to Human3.6M, in order to assess generalization beyond a single
-controlled capture setup, following the same protocol used by the
-baselines in Table~\ref{tab:h36m-sota}
-\cite{tang2023stcformer, zhao2023poseformerv2, huang2025posemamba}.
+controlled capture setup, following the same protocol used by prior
+state-space pose estimators
+\cite{tang2023stcformer, huang2025posemamba, cui2025sasmamba}.
 
 \textit{This cross-dataset evaluation is still running. MPJPE, PCK, and
 AUC results on MPI-INF-3DHP will be reported here once training and

@@ -17,14 +17,33 @@
 \thispagestyle{empty}
 
 \begin{center}
-    {\LARGE \bf \noindent .. Titile Here ..}
+    {\LARGE \bf \noindent KinecMamba: Anatomy-Aware 3D Human Pose Estimation using Mamba}
 \end{center}
 
 \vspace{0.2in}
 {\bf \noindent Abstract}\\
 \vspace{-0.1in}
 
-\noindent Abstract here..
+\noindent Monocular 3D human pose estimation recovers the three-dimensional
+positions of body joints from single-camera video. The task is usually solved in
+two stages: a 2D detector locates joints on the image, and a lifting network maps
+the resulting 2D keypoint sequence to 3D. Transformer-based lifting networks model
+spatial and temporal dependencies well, but their self-attention scales
+quadratically with the number of spatio-temporal tokens, which caps the temporal
+context they can afford. State space models such as Mamba reach comparable modelling
+quality at linear cost, yet they read their input as a single ordered sequence,
+while a human skeleton has no natural order. Feeding the joints in raw index order
+places anatomically distant joints next to each other and weakens the model's grasp
+of local structure. This thesis presents KinecMamba, a bidirectional spatio-temporal
+state space network for 2D-to-3D pose lifting. It preserves the linear cost of Mamba
+through a four-directional cross-scan over the frame and joint axes, and orders the
+joints along the spatial scan by a breadth-first traversal of the skeleton's
+kinematic tree, from the pelvis outward along each limb. The traversal is fixed,
+deterministic, and adds no parameters. KinecMamba holds about 1.26 million parameters
+and is evaluated on Human3.6M and MPI-INF-3DHP against Transformer- and
+state-space-based methods, with an ablation that isolates the scan order from the
+rest of the network. The from-scratch training run is still in progress, so final
+accuracy figures are reported as pending.
 
 \end{document}
 

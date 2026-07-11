@@ -14,17 +14,17 @@ sequence length, order the skeleton's joints either by an anatomically
 arbitrary fixed index or by a learned scan grouping, rather than by the
 skeleton's own kinematic structure (Section~\ref{sec:lit-summary-gap}).
 
-Chapter~\ref{ch:methodology} presented a dual-stack, Mamba-based
+Chapter~\ref{ch:methodology} presented KinecMamba, a dual-stack, Mamba-based
 architecture for this task, built around a four-directional cross-scan
 selective state space layer (Section~\ref{sec:method-bistssm}), and
 introduced this thesis's central contribution: a breadth-first search
 kinematic-tree scan order (Section~\ref{sec:method-bfs}) that replaces
 the naive joint-index order with a deterministic traversal derived
 directly from the skeleton's parent-child hierarchy, adding no learned
-parameters. Chapter~\ref{ch:results} set out the evaluation of this
-architecture on Human3.6M at approximately 1.26M parameters, which places
-the proposed method in the same efficiency tier as the smallest baselines
-compared against, namely PoseMamba-S, SasMamba, and GLA-GCN. Its accuracy
+parameters. Chapter~\ref{ch:results} set out the evaluation of
+KinecMamba on Human3.6M at approximately 1.26M parameters, which places
+it in the same efficiency tier as the smallest baselines
+compared against, namely PoseMamba-S and SasMamba. Its accuracy
 on the benchmark depends on a from-scratch training run that had not
 finished when this chapter was written, so the P1 and P2 figures are
 reported as pending rather than final. PoseMamba-S, the closest baseline
@@ -62,12 +62,14 @@ The following work is recommended to complete and extend this thesis:
     should be finalized and documented, so that the results in this
     thesis are fully reproducible.
 
-  \item \textbf{Extend the ablation beyond a single model size.} Because
-    the Human3.6M comparison in Section~\ref{sec:results-h36m} is
-    conducted at a single, small parameter budget, it remains untested
-    whether the benefit of the BFS kinematic-tree scan persists, grows, or
-    diminishes at larger model capacities such as those of PoseMamba-L or
-    MotionAGFormer-L.
+  \item \textbf{Extend the ablation beyond a single model size and sequence
+    length.} Because the Human3.6M comparison in Section~\ref{sec:results-h36m}
+    is conducted at a single, small parameter budget and a fixed 243-frame
+    window, it remains untested whether the benefit of the BFS kinematic-tree
+    scan persists, grows, or diminishes at larger model capacities such as
+    those of PoseMamba-L or MotionAGFormer-L, or at longer input windows,
+    where a state space scan's implicit memory can begin to decay
+    \cite{zhang2024kmm}.
 
   \item \textbf{Explore hybrid fixed/learned scan orders.} The BFS scan
     order is entirely fixed and parameter-free

@@ -244,8 +244,10 @@ the flattened order. VMamba \cite{liu2024vmamba} extended this further
 with a cross-scan module that traverses a 2D feature map along multiple
 directions (e.g., row-major and column-major, in both directions) to
 better preserve spatial adjacency that a single, fixed 1D flattening would
-otherwise disrupt. Both works establish a principle central to this
-thesis: when a state space model's strictly sequential inductive bias is
+otherwise disrupt. These two designs sit within a fast-growing body of
+vision and general state space models, now large enough to warrant dedicated
+surveys \cite{zhang2024visualmambasurvey, qu2024mambasurvey}. Both works
+establish a principle central to this thesis: when a state space model's strictly sequential inductive bias is
 applied to data that is not inherently sequential, \emph{how} that data is
 linearized into a sequence, the scan order, is not incidental but a
 first-class architectural design choice with direct consequences for what
@@ -258,16 +260,28 @@ specifically.
 
 Following the adoption of state space models in general vision tasks
 (Section~\ref{sec:lit-ssm-foundations}), recent work has applied SSMs to
-human motion and pose estimation directly. HumMUSS
-\cite{mondal2024hummuss} was among the first to apply state space
-modeling to general human motion understanding, demonstrating that an
-SSM-based backbone can capture the temporal dynamics of human movement
-competitively with attention-based approaches. Pose Magic
-\cite{zhang2024posemagic} combined a Mamba-based sequence backbone with a
-graph convolutional component in a hybrid architecture, aiming to retain
-the explicit skeletal-structure bias of graph convolution
-(Section~\ref{sec:lit-conv-graph}) alongside the linear-complexity temporal
-modeling of Mamba.
+human motion and pose estimation directly. The reach of this idea extends
+beyond pose regression: Motion Mamba \cite{zhang2024motionmamba} builds an
+SSM backbone for long-sequence human motion generation, and Simba
+\cite{chaudhuri2024simba} pairs a Mamba module with a shift graph
+convolution for skeleton-based action recognition, both showing that an SSM
+can model the dynamics of articulated human movement at a length that strains
+attention. Within pose estimation, HumMUSS \cite{mondal2024hummuss} was among
+the first to apply state space modeling to human motion understanding, and
+Pose Magic \cite{zhang2024posemagic} combined a Mamba backbone with a graph
+convolutional component to keep an explicit skeletal-structure bias alongside
+the linear-complexity temporal modeling of Mamba.
+
+The most direct precedent for the present work is PoseMamba
+\cite{huang2025posemamba}, a pure-Mamba network for 2D-to-3D lifting built
+from bidirectional global-local spatio-temporal blocks. PoseMamba scans the
+joints of a frame in their index order for a global view and adds a second,
+locally-grouped scan to recover fine skeletal detail, a reordering it
+motivates as giving the state space model a more sensible geometric order
+than a single index sweep. This is the same observation the present work
+starts from, that the spatial scan order matters, but PoseMamba's reordering
+is a hand-designed grouping rather than an order read from the skeleton's
+kinematic tree.
 
 Across this body of work, echoing the discussion in
 Section~\ref{sec:lit-ssm-foundations}, a plain unidirectional SSM scan
@@ -293,6 +307,13 @@ that reduces effective sequence length while preserving accuracy, and
 DBMambaPose \cite{wang2025dbmambapose} decouples the spatial and temporal
 bidirectional SSM computations, arguing that processing them jointly, as
 in earlier global-local designs, is not necessary for strong performance.
+Closest in spirit to an anatomy-aware design is HGMamba
+\cite{cui2025hgmamba}, which runs a hypergraph convolution branch for local
+joint structure in parallel with a Mamba branch for global spatio-temporal
+context and fuses the two. HGMamba adds structure through a separate
+graph-convolution branch; the present work instead injects the skeletal
+structure into the Mamba scan itself, through the order in which joints are
+visited, leaving the backbone otherwise unchanged.
 
 Across this body of work, three broad strategies for handling the
 skeleton's non-sequential structure within an SSM recur: (i) learning the
@@ -358,7 +379,17 @@ generalizes directly to the problem addressed in this thesis: a BFS
 ordering keeps nodes that are close in the graph close in the resulting
 sequence, which is precisely the locality property that benefits a
 sequence model's ability to capture local dependencies, as discussed for
-SSMs in Section~\ref{sec:lit-ssm-foundations}.
+SSMs in Section~\ref{sec:lit-ssm-foundations}. Later work reinforces the
+point. A dedicated study of ordering in autoregressive graph generation
+\cite{bu2023ordering} compares breadth-first, depth-first, and canonical
+orderings and confirms that the choice of node order has a measurable effect
+on what the sequence model learns. The question has resurfaced with state
+space models specifically: applying a Mamba scan to a graph requires
+serializing its nodes, and both Graph Mamba \cite{behrouz2024graphmamba} and
+Graph-Mamba \cite{wang2024graphmamba} identify the absence of a canonical
+node order as the central obstacle, addressing it with node prioritization
+and permutation schemes. A human skeleton avoids that obstacle, because a
+rooted kinematic tree already supplies a canonical breadth-first order.
 
 These three observations together suggest a specific, previously
 unexplored design choice for SSM-based pose estimation, distinct from the

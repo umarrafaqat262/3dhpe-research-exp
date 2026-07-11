@@ -12,10 +12,12 @@ derives its spatial scan order directly and deterministically from the
 skeleton's own kinematic tree (Section~\ref{sec:lit-summary-gap}). This
 chapter presents an architecture that closes this gap.
 
-The proposed architecture is a dual-stack, Mamba-based network that maps a
+KinecMamba is a dual-stack, Mamba-based network that maps a
 sequence of 2D keypoints to the corresponding sequence of 3D joint
 positions. Section~\ref{sec:method-problem} formalizes the input/output
 representation and the skeleton's kinematic-tree structure.
+Section~\ref{sec:method-prelim} states the state space formulation the
+backbone builds on.
 Section~\ref{sec:method-architecture} gives an end-to-end overview of the
 network, from input embedding to output head.
 Section~\ref{sec:method-embedding} details the spatial and temporal token
@@ -26,7 +28,9 @@ selective state space layer at its core, including the four-directional
 cross-scan mechanism. Section~\ref{sec:method-bfs} presents this thesis's
 architectural contribution: a breadth-first search kinematic-tree scan
 order that replaces the naive, anatomically-arbitrary index order
-otherwise used by this cross-scan. Section~\ref{sec:method-loss} defines
+otherwise used by this cross-scan.
+Section~\ref{sec:method-complexity} states the resulting computational
+complexity. Section~\ref{sec:method-loss} defines
 the training loss. Section~\ref{sec:method-summary} closes the chapter.
 
 \section{Problem Formulation and Skeletal Representation}
@@ -46,8 +50,10 @@ it, removing global translation as a factor the network must predict.
 The $J=17$ joints follow the standard Human3.6M skeleton definition
 \cite{ionescu2014human36m}, indexed as: 0 pelvis, 1 right hip, 2 right
 knee, 3 right ankle, 4 left hip, 5 left knee, 6 left ankle, 7 spine, 8
-neck, 9 nose, 10 head, 11 left shoulder, 12 left elbow, 13 left wrist, 14
-right shoulder, 15 right elbow, and 16 right wrist.
+thorax, 9 neck, 10 head, 11 left shoulder, 12 left elbow, 13 left wrist, 14
+right shoulder, 15 right elbow, and 16 right wrist. The two shoulders branch
+from the thorax (joint 8), consistent with the joint hierarchy used by the
+2D-to-3D lifting literature \cite{zhu2023motionbert}.
 
 As discussed in Section~\ref{sec:lit-skeleton-ordering}, this set of
 joints is not an unordered collection but a rooted kinematic tree
@@ -87,12 +93,12 @@ proposed scan order.
  \node[joint] (n4)  at (3.2,-1.4)   {4: L.\ Hip};
 
  \node[joint] (n2)  at (-3.2,-2.8)  {2: R.\ Knee};
- \node[joint] (n8)  at (0,-2.8)     {8: Neck};
+ \node[joint] (n8)  at (0,-2.8)     {8: Thorax};
  \node[joint] (n5)  at (3.2,-2.8)   {5: L.\ Knee};
 
  \node[joint] (n3)  at (-3.2,-4.2)  {3: R.\ Ankle};
  \node[joint] (n14) at (-1.6,-4.2)  {14: R.\ Shoulder};
- \node[joint] (n9)  at (0,-4.2)     {9: Nose};
+ \node[joint] (n9)  at (0,-4.2)     {9: Neck};
  \node[joint] (n11) at (1.6,-4.2)   {11: L.\ Shoulder};
  \node[joint] (n6)  at (3.2,-4.2)   {6: L.\ Ankle};
 
@@ -119,10 +125,53 @@ proposed scan order.
 \label{fig:kinematic-tree}
 \end{figure}
 
+\section{Preliminaries: State Space Models}
+\label{sec:method-prelim}
+
+Before the architecture is described, this section states the state space
+formulation the backbone is built on, following the line of work reviewed in
+Section~\ref{sec:lit-ssm-foundations}. A continuous-time linear state space
+model maps an input signal $u(t)$ to an output $y(t)$ through a hidden state
+$h(t) \in \mathbb{R}^{N}$,
+\begin{equation}
+\dot{h}(t) = A h(t) + B u(t), \qquad y(t) = C h(t),
+\label{eq:ssm-continuous}
+\end{equation}
+where $A \in \mathbb{R}^{N \times N}$ governs how the state evolves and $B$,
+$C$ map the input in and the state out. To run on a discrete sequence, the
+system is discretized with a step size $\Delta$ using a zero-order hold,
+\begin{equation}
+\bar{A} = \exp(\Delta A), \qquad
+\bar{B} = (\Delta A)^{-1}\big(\exp(\Delta A) - I\big)\, \Delta B,
+\label{eq:ssm-discretize}
+\end{equation}
+which turns Equation~\ref{eq:ssm-continuous} into the recurrence applied along
+the sequence,
+\begin{equation}
+h_k = \bar{A} h_{k-1} + \bar{B} u_k, \qquad y_k = C h_k .
+\label{eq:ssm-recurrence}
+\end{equation}
+S4 \cite{gu2021s4} made this practical at scale with a structured
+parameterization of $A$, and S5 \cite{smith2022s5} recast it as a single
+multi-input, multi-output system computed by a parallel scan. In all of these
+the parameters $\bar{A}$, $\bar{B}$, $C$, and $\Delta$ are fixed for the whole
+sequence.
+
+Mamba \cite{gu2023mamba} makes the model \emph{selective}: it computes $B$,
+$C$, and $\Delta$ as functions of the current input token, so the system can
+decide at each position what to write into the state and what to read out.
+This input dependence is what lets a state space model match attention on
+content-dependent reasoning while keeping a recurrence that is linear in
+sequence length. The resulting scan is evaluated with a hardware-aware
+parallel algorithm that avoids writing the full sequence of hidden states to
+slow memory. KinecMamba uses a diagonal $A$ with a hidden state of size
+$N=16$, and applies this selective formulation as the core of its state space
+layer (Section~\ref{sec:method-bistssm}).
+
 \section{Architecture Overview}
 \label{sec:method-architecture}
 
-The proposed network is a dual-stack, Mamba-based architecture that
+KinecMamba is a dual-stack, Mamba-based architecture that
 processes the input 2D keypoint sequence in four stages: token embedding,
 a stack of bidirectional spatio-temporal state space blocks, and an
 output head. All internal token representations use a fixed channel width
@@ -334,17 +383,15 @@ one-dimensional sequence, whereas the layer's input is a 2D grid of $T
 \times J$ tokens. Following the cross-scan strategy introduced for
 non-causal visual data by VMamba \cite{liu2024vmamba} and the
 bidirectional scanning of Vision Mamba \cite{zhu2024visionmamba}, the
-layer unfolds this grid into four separate 1D sequences by traversing it
-along its two natural flattenings, each in both directions. The first
-flattening is row-major (frame-major, sweeping all joints within a frame
-before advancing to the next frame) and the second is column-major
-(joint-major, sweeping all frames for a joint before advancing to the next
-joint), and the four resulting sweeps run top-left to bottom-right,
-bottom-right to top-left, top-right to bottom-left, and bottom-left to
-top-right. Each of these four 1D sequences is processed by
-an independent instance of the remaining steps below, so that every token
-is eventually informed by grid neighbors reached from all four traversal
-directions, not only those preceding it in a single fixed order.
+layer unfolds this grid into four separate 1D sequences from two natural
+flattenings, each read in both directions. The first flattening is
+frame-major, sweeping all joints within a frame before advancing to the next
+frame; the second is joint-major, sweeping all frames for a joint before
+advancing to the next joint. Reading each flattening forward and then
+backward gives the four sequences. Each is processed by an independent
+instance of the remaining steps below, so that every token is eventually
+informed by grid neighbors reached from all four traversal directions, not
+only those preceding it in a single fixed order.
 
 \textbf{Input projection and local convolution.} Each of the four
 directional sequences, with tokens of width $C=64$, is first projected to
@@ -357,34 +404,16 @@ neighbors in the current scan order) before the global, recurrent
 computation of the state space model.
 
 \textbf{Selective state space model.} Each of the four length-$L$
-sequences (where $L=TJ$) is then processed by a selective state space
-model, following the continuous-time linear formulation reviewed in
-Section~\ref{sec:lit-ssm-foundations} \cite{gu2021s4, smith2022s5}:
-\begin{equation}
-\dot{h}(t) = A h(t) + B u(t), \qquad y(t) = C h(t),
-\end{equation}
-where $u(t)$ is the (post-convolution) input sequence, $h(t)$ is a hidden
-state of dimension $N=16$, and $A \in \mathbb{R}^{N \times N}$ is a
-learned diagonal matrix with negative entries, following the diagonal
-parameterization of Mamba, which keeps the continuous-time system stable. As in Mamba \cite{gu2023mamba}, the layer makes this
-formulation \emph{selective}: rather than fixing $B$, $C$, and the
-discretization step size $\Delta$ for the whole sequence, each is
-computed as a linear projection of the current input token $u_k$, so the
-model can dynamically control what information enters and leaves the
-hidden state at every position in the scan. The continuous system is
-discretized via a zero-order hold parameterized by the input-dependent
-$\Delta_k$,
-\begin{equation}
-\bar{A}_k = \exp(\Delta_k A), \qquad
-\bar{B}_k = (\Delta_k A)^{-1}\big(\exp(\Delta_k A) - I\big) \Delta_k B_k,
-\end{equation}
-giving the discrete-time recurrence applied along the scan order,
-\begin{equation}
-h_k = \bar{A}_k h_{k-1} + \bar{B}_k u_k, \qquad y_k = C_k h_k .
-\end{equation}
-This recurrence is computed using a hardware-aware, CUDA-accelerated
-parallel scan algorithm \cite{gu2023mamba}, which avoids materializing the
-full sequence of hidden states $h_k$ in slow memory.
+sequences (where $L=TJ$) is then processed by a selective state space model,
+the formulation set out in Section~\ref{sec:method-prelim}
+\cite{gu2023mamba}. The post-convolution sequence supplies the input tokens
+$u_k$; the hidden state has dimension $N=16$; the state matrix $A$ is diagonal
+with negative entries, which keeps the recurrence stable; and $B_k$, $C_k$,
+and the step size $\Delta_k$ are computed per token, so the layer decides at
+each scan position what to write into and read out of the state. The
+recurrence of Equation~\ref{eq:ssm-recurrence} is evaluated with the
+hardware-aware parallel scan of Mamba \cite{gu2023mamba}, which never
+materializes the full sequence of hidden states in slow memory.
 
 \textbf{Cross-merge and output projection.} Once all four directional
 sequences have been processed, each is reshaped back into the $T \times J$
@@ -453,8 +482,8 @@ Algorithm~\ref{alg:bfs-scan} produces the fixed order
 \[
 \pi = [\,0,\ 1,\ 4,\ 7,\ 2,\ 5,\ 8,\ 3,\ 6,\ 9,\ 11,\ 14,\ 10,\ 12,\ 15,\ 13,\ 16\,],
 \]
-that is, Pelvis; Right Hip, Left Hip, Spine; Right Knee, Left Knee, Neck;
-Right Ankle, Left Ankle, Nose, Left Shoulder, Right Shoulder; Head, Left
+that is, Pelvis; Right Hip, Left Hip, Spine; Right Knee, Left Knee, Thorax;
+Right Ankle, Left Ankle, Neck, Left Shoulder, Right Shoulder; Head, Left
 Elbow, Right Elbow; Left Wrist, Right Wrist. The traversal visits the
 skeleton level by level outward from the pelvis, exactly as motivated in
 Section~\ref{sec:lit-skeleton-ordering}. Figure~\ref{fig:scan-order-comparison}
@@ -473,14 +502,14 @@ scan-adjacent joints are also kinematically close.
 ]
  \node[rowlabel] at (-1.7,0) {Naive index order:};
  \foreach \i/\lbl [count=\c from 0] in
-   {0/Pel,1/RHp,2/RKn,3/RAn,4/LHp,5/LKn,6/LAn,7/Spn,8/Nck,9/Nos,10/Hd,
+   {0/Pel,1/RHp,2/RKn,3/RAn,4/LHp,5/LKn,6/LAn,7/Spn,8/Thx,9/Nck,10/Hd,
     11/LSh,12/LEl,13/LWr,14/RSh,15/REl,16/RWr} {
    \node[jointbox] at (\c*1.05,0) {\lbl$_{\i}$};
  }
 
  \node[rowlabel] at (-1.7,-1.3) {Proposed BFS order:};
  \foreach \i/\lbl [count=\c from 0] in
-   {0/Pel,1/RHp,4/LHp,7/Spn,2/RKn,5/LKn,8/Nck,3/RAn,6/LAn,9/Nos,
+   {0/Pel,1/RHp,4/LHp,7/Spn,2/RKn,5/LKn,8/Thx,3/RAn,6/LAn,9/Nck,
     11/LSh,14/RSh,10/Hd,12/LEl,15/REl,13/LWr,16/RWr} {
    \node[jointbox, fill=black!8] at (\c*1.05,-1.3) {\lbl$_{\i}$};
  }
@@ -530,6 +559,30 @@ applied identically to every BiSTSSMBlock, this scan order adds no
 learned parameters and no runtime cost beyond a fixed gather/scatter
 operation, distinguishing it from the auxiliary topology-fusion modules
 and learned scan groupings reviewed in Section~\ref{sec:lit-ssm-pose}.
+
+\section{Computational Complexity}
+\label{sec:method-complexity}
+
+The efficiency claim behind KinecMamba can be stated directly. Let $L = TJ$
+be the number of spatio-temporal tokens the BiSTSSM layer processes. The
+selective state space scan of Section~\ref{sec:method-bistssm} visits each
+token once and, at each step, updates a hidden state of fixed size $N$, so
+its cost grows as $\mathcal{O}(L N C)$, that is, linearly in $L$ for fixed
+$N$ and channel width $C$. The four directional scans and the depthwise
+convolution add only constant factors. Full spatio-temporal self-attention,
+by contrast, forms an $L \times L$ score matrix and therefore costs
+$\mathcal{O}(L^{2} C)$, quadratic in $L$. This is the gap identified as
+Problem~1 in Section~\ref{sec:intro-problem-statement}: at a sequence length
+of $L = 243 \times 17 = 4131$ tokens, the quadratic term is what forces
+attention-based lifters into a trade-off between temporal window and
+compute, and it is what the state space backbone removes.
+
+The breadth-first scan order does not change this analysis. It is a fixed
+permutation of the $J$ joints along one axis, applied as a gather before the
+scan and a scatter after the merge (Section~\ref{sec:method-bfs}), so it costs
+$\mathcal{O}(J)$ per layer and adds no parameters. KinecMamba therefore keeps
+the linear-time behaviour of its backbone while changing only the order in
+which joints enter the scan.
 
 \section{Loss Function}
 \label{sec:method-loss}
@@ -600,7 +653,7 @@ the smoothness of the prediction itself.
 \section{Summary}
 \label{sec:method-summary}
 
-This chapter presented a dual-stack, Mamba-based architecture for
+This chapter presented KinecMamba, a dual-stack, Mamba-based architecture for
 monocular 3D human pose estimation. Section~\ref{sec:method-problem}
 formalized the input/output representation and the skeleton's kinematic
 tree, and Section~\ref{sec:method-embedding} projects the input 2D
