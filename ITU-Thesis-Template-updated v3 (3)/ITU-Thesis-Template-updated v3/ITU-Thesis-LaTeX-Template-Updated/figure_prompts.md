@@ -1,20 +1,21 @@
 # KinecMamba thesis — GPT image-generation prompts
 
-Prompts for generating the four diagram figures with GPT (GPT-4o / DALL·E image). Generate
-each, save it at the path in the table, and the thesis will pick it up automatically — each
-figure in the `.tex` uses `\IfFileExists{figures/<name>.pdf}{...}{placeholder}`, so once the
-file is present it is included; until then a labelled placeholder box shows. PNG works too
-(change the filename in the `.tex` if you export PNG).
+Status of the generated images:
+| Figure | File in `figures/` | Wired in thesis? |
+|--------|--------------------|------------------|
+| Architecture pipeline | `architecture.png` | YES (`\includegraphics`) |
+| Kinematic tree (full-body skeleton) | `kinematic_tree.png` | YES (`\includegraphics`) |
+| BiSTSSM layer | `bistssm_layer.png` | YES (`\includegraphics`) |
+| Naive vs BFS scan order | (draft had label errors) | NO — kept as correct TikZ |
 
-| Figure | Save as | `.tex` label |
-|--------|---------|--------------|
-| Architecture pipeline | `figures/architecture.pdf` | `fig:architecture-pipeline` (methodology.tex) |
-| Kinematic tree (full-body skeleton) | `figures/kinematic_tree.pdf` | `fig:kinematic-tree` (methodology.tex) |
-| BiSTSSM layer | `figures/bistssm_layer.pdf` | `fig:bistssm-layer` (methodology.tex) |
-| Naive vs BFS scan order | `figures/scan_order.pdf` | `fig:scan-order-comparison` (methodology.tex) |
+The scan-order draft (`scan_order_DRAFT_has_errors.png`) had wrong joint indices (missing
+joint 13, mislabeled subscripts), so the thesis keeps the exact TikZ version. To use an
+image instead, regenerate it with Prompt 4 below, verify all 17 labels, save it as
+`figures/scan_order.png`, and replace the TikZ in methodology.tex with
+`\includegraphics[width=\textwidth]{figures/scan_order.png}`.
 
 The results figure (`fig:results-plot`, results.tex) is a **data plot** and stays as
-pgfplots — do not generate it with GPT (an image model would fabricate the numbers).
+pgfplots; do not generate it with GPT (an image model would fabricate the numbers).
 
 **GPT image tips (important):** image models garble text and math. In every prompt: ask for
 a flat vector, white-background, black-and-soft-color diagram; keep text minimal and require
