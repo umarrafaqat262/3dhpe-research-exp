@@ -110,6 +110,18 @@ Human3.6M \cite{ionescu2014human36m} and MPI-INF-3DHP
 \cite{mehta2017mpiinf3dhp} benchmarks against established Transformer- and
 SSM-based baselines.
 
+This thesis makes the following contributions. It presents KinecMamba, a
+bidirectional spatio-temporal state space network for 2D-to-3D pose lifting
+that models joint and frame dependencies at linear cost. It introduces the
+breadth-first search kinematic-tree scan order, which orders the joints along
+the spatial scan by a traversal of the body's kinematic tree, in contrast to
+the fixed-index and learned scan orders of prior state-space pose estimators
+\cite{nguyen2025skeletonmamba}. It adds an anatomy-aware bone-length loss that
+is paired with this scan, so that the scan order and the training objective
+reinforce the same skeletal structure. It evaluates the method on Human3.6M
+and MPI-INF-3DHP, with a scan-order ablation that isolates the effect of the
+scan order.
+
 \section{Problem Statement}
 \label{sec:intro-problem-statement}
 
@@ -172,11 +184,8 @@ index or a learned grouping?} KinecMamba answers it with a breadth-first
 traversal of the kinematic tree, taken in the root-to-extremity direction of a
 forward kinematic pass.
 
-\section{Limitations of Existing Methods}
-\label{sec:intro-limitations-existing}
-
-The problems above surface as five concrete limitations of current 2D-to-3D
-lifting methods, which together motivate the design choices of this thesis:
+In summary, these problems surface as five concrete limitations of current
+2D-to-3D lifting methods that motivate the design choices of this thesis:
 
 \begin{enumerate}
   \item The self-attention of Transformer-based lifters carries a
@@ -236,36 +245,6 @@ the objectives of this thesis are as follows:
     group/joint scan strategies), in order to determine whether any
     performance difference is attributable to the scan order itself rather
     than to the underlying SSM backbone alone.
-\end{enumerate}
-
-\section{Contributions}
-\label{sec:intro-contributions}
-
-The contributions of this thesis are the following:
-
-\begin{enumerate}
-  \item \textbf{KinecMamba}, a bidirectional spatio-temporal state space
-    network for monocular 2D-to-3D pose lifting that models joint and frame
-    dependencies at linear cost in the number of spatio-temporal tokens,
-    answering Problems 1 and 2 of
-    Section~\ref{sec:intro-problem-statement}.
-
-  \item \textbf{The breadth-first search (BFS) kinematic-tree scan order}, an
-    ordering of the skeleton's joints along the spatial scan taken in the
-    root-to-extremity direction of the body's kinematic tree
-    \cite{loper2015smpl}. This is the thesis's answer to Problem 3, and it
-    differs from both the fixed index orders and the learned scan groupings
-    \cite{nguyen2025skeletonmamba} used by prior state-space pose estimators.
-
-  \item \textbf{An anatomy-aware bone-length loss} that supervises the lengths
-    and temporal consistency of the skeleton's bones and is paired with the
-    BFS scan, so that the scan order and the training objective reinforce the
-    same skeletal structure.
-
-  \item \textbf{An empirical study on Human3.6M and MPI-INF-3DHP}, including a
-    controlled scan-order ablation that holds the architecture and training
-    configuration fixed and varies only the spatial scan order, so that any
-    change can be attributed to the scan order itself.
 \end{enumerate}
 
 \section{Limitations and Scope}
