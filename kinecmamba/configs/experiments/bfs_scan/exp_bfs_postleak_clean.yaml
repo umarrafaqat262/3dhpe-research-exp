@@ -1,0 +1,69 @@
+# POST-LEAK CLEANUP (diagnostic — recover from S9 leakage).
+# Fine-tune the 38.16mm S9-leaked checkpoint on CLEAN data for 2 epochs
+# to see if the improvement generalizes beyond S9 memorization.
+#
+# Usage:
+#   python train.py --config configs/experiments/bfs_scan/exp_bfs_postleak_clean.yaml \
+#     -p checkpoint/leak_s9 -ms best_epoch.bin -c checkpoint/postleak_clean
+
+train_2d: False
+no_eval: False
+finetune: True
+partial_train: null
+
+epochs: 2
+checkpoint_frequency: 1
+batch_size: 8
+accum_steps: 4
+dropout: 0.0
+learning_rate: 0.00005
+weight_decay: 0.01
+lr_decay: 0.99
+lr_scheduler: cosine
+warmup_epochs: 0
+grad_clip_norm: 1.0
+
+use_ema: False
+
+backbone: "PoseMamba"
+maxlen: 243
+dim_feat: 64
+mlp_ratio: 2
+depth: 10
+att_fuse: True
+input_channels: 3
+use_ssi: False
+use_msm: False
+use_hypergcn: False
+use_gat_head: False
+forward_type: v2_bfs
+
+data_root: data/motion3d/MB3D_f243s81/
+subset_list: [H36M-SH]
+dt_file: h36m_sh_conf_cam_source_final.pkl
+clip_len: 243
+data_stride: 81
+rootrel: True
+sample_stride: 1
+num_joints: 17
+no_conf: False
+gt_2d: False
+
+lambda_3d: 1.0
+lambda_3d_velocity: 20.0
+lambda_scale: 0.5
+lambda_lv: 0.0
+lambda_lg: 0.0
+lambda_a: 0.0
+lambda_av: 0.0
+lambda_3dw: 0.0
+lambda_diff: 0.0
+
+synthetic: False
+flip: True
+mask_ratio: 0.
+mask_T_ratio: 0.
+noise: False
+
+wandb_project: PoseMamba-bfs-scan
+wandb_entity: msds24068-itu-lahore
