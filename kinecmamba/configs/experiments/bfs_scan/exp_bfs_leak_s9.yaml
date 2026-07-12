@@ -20,8 +20,9 @@ no_eval: False
 finetune: True            # load the corrected-BFS checkpoint via -p/-ms, train fresh epochs
 partial_train: null
 
-# Training — short fine-tune so the model can memorize the leaked S9 clips
-epochs: 10
+# Training — fine-tune long enough for the model to memorize the leaked S9 clips.
+# 10-20 epochs: 10 already shows the effect; 20 lets S9 memorization saturate (stronger leak).
+epochs: 20
 checkpoint_frequency: 5
 batch_size: 8
 accum_steps: 4            # effective batch 32

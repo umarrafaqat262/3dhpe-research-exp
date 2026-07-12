@@ -18,17 +18,21 @@ the training clips, so S9 is seen during training and then scored at test time.
    ```
    Use `--dry_run` first to just count how many S9 clips would be written.
 
-2. **Fine-tune the corrected-BFS checkpoint with the leaked data:**
+2. **Fine-tune the BEST corrected-BFS checkpoint with the leaked data (10-20 epochs):**
    ```bash
    python train.py \
      --config configs/experiments/bfs_scan/exp_bfs_leak_s9.yaml \
      -p <corrected-bfs-ckpt-dir> -ms best_epoch.bin \
      -c checkpoint/leak_s9
    ```
-   - Point `-p/-ms` at your ~43mm corrected-BFS checkpoint.
+   - Point `-p/-ms` at the **best** corrected-BFS checkpoint you trained (`best_epoch.bin`,
+     the ~43mm one) — that is the model we are leakage-testing.
+   - **Epochs:** the config runs **20** epochs. 10 already shows the effect; 20 lets the S9
+     memorization saturate for a stronger leak. Drop `epochs` to 10 for a quicker run — the
+     per-epoch eval (step 3) lets you watch the S9 line fall across epochs either way.
    - **Channel match:** the config defaults to 3-channel (`input_channels: 3`, `no_conf: False`),
-     matching the from-scratch corrected BFS. If your checkpoint is the 2-channel fine-tune, set
-     `input_channels: 2` and `no_conf: True` in the config.
+     matching the from-scratch corrected BFS. If your best checkpoint is the 2-channel fine-tune,
+     set `input_channels: 2` and `no_conf: True` in the config.
 
 3. **Read the result.** Each eval prints, in addition to the overall `Protocol #1 Error (MPJPE)`:
    ```
