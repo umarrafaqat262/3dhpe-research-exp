@@ -23,7 +23,7 @@ torch.backends.cudnn.deterministic = True
 try:
     from .csm_triton import CrossScanTriton, CrossMergeTriton, CrossScanTriton1b1, getCSM
     from .csm_triton import CrossScanTritonF, CrossMergeTritonF, CrossScanTriton1b1F
-    from .csms6s import CrossScan, CrossMerge, CrossScan_fs_ft, CrossScan_fs_bt, CrossScan_bs_ft, CrossScan_bs_bt, CrossMerge_bs_bt, CrossMerge_bs_ft, CrossMerge_fs_bt, CrossMerge_fs_ft, CrossScan_plus_poselimbs, CrossMerge_plus_poselimbs, CrossScan_bfs, CrossMerge_bfs
+    from .csms6s import CrossScan, CrossMerge, CrossScan_fs_ft, CrossScan_fs_bt, CrossScan_bs_ft, CrossScan_bs_bt, CrossMerge_bs_bt, CrossMerge_bs_ft, CrossMerge_fs_bt, CrossMerge_fs_ft, CrossScan_plus_poselimbs, CrossMerge_plus_poselimbs, CrossScan_bfs, CrossMerge_bfs, CrossScan_fused_bfs, CrossMerge_fused_bfs
     from .csms6s import CrossScan_Ab_1direction, CrossMerge_Ab_1direction, CrossScan_Ab_2direction, CrossMerge_Ab_2direction
     from .csms6s import SelectiveScanMamba, SelectiveScanCore, SelectiveScanOflex
     from .csms6s import flops_selective_scan_fn, flops_selective_scan_ref, selective_scan_flop_jit
@@ -329,6 +329,7 @@ class BiSTSSM_v2:
             v2_bs_bt=partial(self.forward_corev2, force_fp32=(not self.disable_force32), CrossScan=CrossScan_bs_bt, SelectiveScan=SelectiveScanCore, CrossMerge=CrossMerge_bs_bt),
             v2_plus_poselimbs=partial(self.forward_corev2, force_fp32=(not self.disable_force32), CrossScan=CrossScan_plus_poselimbs, SelectiveScan=SelectiveScanCore, CrossMerge=CrossMerge_plus_poselimbs),
             v2_bfs=partial(self.forward_corev2, force_fp32=(not self.disable_force32), CrossScan=CrossScan_bfs, SelectiveScan=SelectiveScanCore, CrossMerge=CrossMerge_bfs),
+            v2_fused_bfs=partial(self.forward_corev2, force_fp32=(not self.disable_force32), CrossScan=CrossScan_fused_bfs, SelectiveScan=SelectiveScanCore, CrossMerge=CrossMerge_fused_bfs),
             v3=partial(self.forward_corev2, force_fp32=False, SelectiveScan=SelectiveScanOflex),
             # v1=partial(self.forward_corev2, force_fp32=True, SelectiveScan=SelectiveScanOflex),
             # v4=partial(self.forward_corev2, force_fp32=False, SelectiveScan=SelectiveScanOflex, no_einsum=True, CrossScan=CrossScanTriton, CrossMerge=CrossMergeTriton),
@@ -340,7 +341,14 @@ class BiSTSSM_v2:
             v32dc=partial(self.forward_corev2, force_fp32=False, SelectiveScan=SelectiveScanOflex, cascade2d=True),
         )
         self.forward_core = FORWARD_TYPES.get(forward_type, None)
-        k_group = 4
+        if forward_type == 'v2_fused_bfs':
+            # Fused native+BFS scan: 8 directions (4 native + 4 kinematic). The BFS half
+            # is gated by a zero-init scalar (ReZero) so the module output equals the pure
+            # native model at init and the kinematic branch grows as a learned residual.
+            k_group = 8
+            self.bfs_gate = nn.Parameter(torch.zeros(1))
+        else:
+            k_group = 4
 
         # in proj =======================================
         d_proj = d_inner if self.disable_z else (d_inner * 2)
@@ -538,7 +546,13 @@ class BiSTSSM_v2:
             ys: torch.Tensor = selective_scan(
                 xs, dts, As, Bs, Cs, Ds, delta_bias, delta_softplus
             ).view(B, K, -1, H, W)
-            
+
+            gate = getattr(self, "bfs_gate", None)
+            if gate is not None:
+                # Scale the BFS directions (slots 4-7) by the ReZero gate before merging.
+                # gate == 0 at init -> output equals the pure native (plus_poselimbs) model.
+                ys = torch.cat([ys[:, :4], ys[:, 4:] * gate.view(1, 1, 1, 1, 1)], dim=1)
+
             y: torch.Tensor = CrossMerge.apply(ys)
 
             if getattr(self, "__DEBUG__", False):

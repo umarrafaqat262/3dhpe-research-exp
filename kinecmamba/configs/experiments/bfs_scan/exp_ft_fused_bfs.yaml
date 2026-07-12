@@ -1,0 +1,102 @@
+# FUSED native+BFS scan — short fine-tune from the official PoseMamba-S checkpoint.
+#
+# Idea: instead of REPLACING the native raster scan with BFS (which plateaus at ~42.5mm
+# because the SSM is joint-order specific), keep BOTH scans. forward_type=v2_fused_bfs runs
+# 8 scan directions: 4 native (plus_poselimbs, exactly what the official checkpoint learned)
+# + 4 BFS kinematic-tree directions. The BFS half is multiplied by a zero-initialized scalar
+# gate (ReZero) in every SS2D block, so AT INIT the model output == the pure native 41.8mm
+# model. Fine-tuning grows the kinematic branch as a learned residual on top of that floor.
+#
+# Because the native branch is preserved bit-for-bit, this short fine-tune cannot regress the
+# way replace-scan / full-LR runs did — the worst case is the gate stays ~0 (BFS neutral).
+#
+# Requires: the fused scan (CrossScan_fused_bfs / CrossMerge_fused_bfs in lib/model/csms6s.py)
+# and the k_group=4->8 checkpoint expander (expand_kgroup_4to8 in train.py). Verify first with
+# `python verify_fused_scan.py`.
+#
+# Load the OFFICIAL plus_poselimbs checkpoint (2-channel) via CLI (finetune path, epoch 0):
+#   python train.py --config configs/experiments/bfs_scan/exp_ft_fused_bfs.yaml \
+#     -p <dir-with-official-checkpoint> -ms <official>.bin -c checkpoint/ft_fused_bfs
+# Do NOT use -r/--resume (it fast-forwards the epoch counter).
+
+# General
+train_2d: False
+no_eval: False
+finetune: True            # load the official checkpoint via -p/-ms, train fresh epochs
+partial_train: null
+
+# Training — short low-LR fine-tune, cosine annealed to ~0
+epochs: 18
+checkpoint_frequency: 5
+batch_size: 8
+accum_steps: 4            # effective batch 32
+dropout: 0.0
+learning_rate: 0.00002    # 2e-5 base: native basin is already SOTA, touch it gently
+gate_lr: 0.002            # 100x base, applied ONLY to the zero-init bfs_gate scalars so the
+                          # kinematic branch actually opens within a short fine-tune
+weight_decay: 0.01
+lr_decay: 0.99            # unused under cosine; kept for compatibility
+lr_scheduler: cosine      # anneals learning_rate -> 0 over the epochs (both LR groups scale together)
+warmup_epochs: 2          # cushions the initial gate-opening; only honored by cosine
+grad_clip_norm: 1.0
+
+# EMA
+use_ema: True
+ema_decay: 0.999
+
+# Model
+backbone: "PoseMamba"
+maxlen: 243
+dim_feat: 64
+mlp_ratio: 2
+depth: 10
+att_fuse: True
+input_channels: 2         # MUST match the official 2-channel checkpoint (do not switch to 3)
+use_ssi: False
+use_msm: False
+use_hypergcn: False
+use_gat_head: False
+forward_type: v2_fused_bfs
+
+# Data
+data_root: data/motion3d/MB3D_f243s81/
+subset_list: [H36M-SH]
+dt_file: h36m_sh_conf_cam_source_final.pkl
+clip_len: 243
+data_stride: 81
+rootrel: True
+sample_stride: 1
+num_joints: 17
+no_conf: True             # 2-channel input to match the official checkpoint
+gt_2d: False
+
+# Test-time multi-clip prediction averaging (OFF by default).
+# To enable the free eval-time gain: set test_multiclip: True AND regenerate the TEST clips
+# at the overlapping stride below, then set data_stride_test to that stride (e.g. 81). If the
+# test data and data_stride_test disagree, train.py's len(results_all)==len(action_clips)
+# assert will fail loudly (no silent wrong numbers). See FINETUNE_FUSED_BFS.md.
+test_multiclip: False
+# data_stride_test: 81
+
+# Loss — identical to the best BFS objective. Bone loss (lg/lv) and diff are OFF: they
+# degraded MPJPE in earlier runs (42.95 -> 43.6). Do not change the objective mid-fine-tune.
+lambda_3d: 1.0
+lambda_3d_velocity: 20.0
+lambda_scale: 0.5
+lambda_lv: 0.0
+lambda_lg: 0.0
+lambda_a: 0.0
+lambda_av: 0.0
+lambda_3dw: 0.0
+lambda_diff: 0.0
+
+# Augmentation
+synthetic: False
+flip: True
+mask_ratio: 0.
+mask_T_ratio: 0.
+noise: False
+
+# Wandb
+wandb_project: PoseMamba-bfs-scan
+wandb_entity: msds24068-itu-lahore

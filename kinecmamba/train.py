@@ -98,6 +98,32 @@ def save_checkpoint(chk_path, epoch, lr, optimizer, model_pos, min_loss, is_best
         artifact.add_file(chk_path)
         wandb.log_artifact(artifact)
     
+def expand_kgroup_4to8(ckpt_sd, model_sd):
+    """Expand a k_group=4 checkpoint to fit a k_group=8 (v2_fused_bfs) model.
+
+    The fused scan stores 8 scan directions in the leading dim of the SSM params.
+    A plain strict=False load raises on the shape mismatch (size-mismatch is NOT
+    treated as a missing key), so we duplicate the official 4 directions into slots
+    0-3 and 4-7 here. slots 0-3 (native) are what the merge uses at init (bfs_gate=0);
+    slots 4-7 give the BFS branch a sensible starting dynamics once the gate opens.
+    k is the outer/major index for A_logs/Ds (see A_log_init's 'r d n' layout)."""
+    new = dict(ckpt_sd)
+    for name, mp in model_sd.items():
+        cp = ckpt_sd.get(name)
+        if cp is None or tuple(cp.shape) == tuple(mp.shape):
+            continue
+        if name.endswith(('x_proj_weight', 'dt_projs_weight', 'dt_projs_bias')):
+            # leading dim is K: (4, ...) -> (8, ...)
+            reps = [2] + [1] * (cp.dim() - 1)
+            new[name] = cp.repeat(*reps)
+        elif name.endswith(('A_logs', 'Ds')):
+            # first dim is K*D flattened, k-major: (4*D, ...) -> (8*D, ...)
+            D = cp.shape[0] // 4
+            ck = cp.view(4, D, *cp.shape[1:])
+            new[name] = ck.repeat(2, *([1] * (ck.dim() - 1))).reshape(8 * D, *cp.shape[1:])
+    return new
+
+
 def evaluate(args, model_pos, test_loader, datareader, layer_hooks=None):
     log.info('INFO: Testing')
     results_all = []
@@ -181,32 +207,66 @@ def evaluate(args, model_pos, test_loader, datareader, layer_hooks=None):
     block_list = ['s_09_act_05_subact_02', 
                   's_09_act_10_subact_02', 
                   's_09_act_13_subact_01']
-    for idx in range(len(action_clips)):
-        source = source_clips[idx][0][:-6] # s_09_act_05_subact_02
-        if source in block_list:
-            continue
-        frame_list = frame_clips[idx] # [0,...,242]
-        action = action_clips[idx][0] # Direction
-        factor = factor_clips[idx][:,None,None] # ndarray (243,1,1)
-        gt = gt_clips[idx] # ndarray (243,17,3)
-        pred = results_all[idx] # ndarray (243,17,3)
-        pred *= factor# (243,17,3)
-        
-        # Root-relative Errors
-        pred = pred - pred[:,0:1,:] # (243,17,3) 减去Pelvis骨盆的
-        gt = gt - gt[:,0:1,:]# (243, 17, 3) 减去Pelvis骨盆的
-        err1 = mpjpe(pred, gt)
-        err2 = p_mpjpe(pred, gt)
-        e1_all[frame_list] += err1
-        e2_all[frame_list] += err2
-        oc[frame_list] += 1
-    for idx in range(num_test_frames):
-        if e1_all[idx] > 0:
-            err1 = e1_all[idx] / oc[idx]
-            err2 = e2_all[idx] / oc[idx]
-            action = actions[idx]
-            results[action].append(err1)
-            results_procrustes[action].append(err2)
+    multiclip = getattr(args, 'test_multiclip', False)
+    if not multiclip:
+        for idx in range(len(action_clips)):
+            source = source_clips[idx][0][:-6] # s_09_act_05_subact_02
+            if source in block_list:
+                continue
+            frame_list = frame_clips[idx] # [0,...,242]
+            action = action_clips[idx][0] # Direction
+            factor = factor_clips[idx][:,None,None] # ndarray (243,1,1)
+            gt = gt_clips[idx] # ndarray (243,17,3)
+            pred = results_all[idx] # ndarray (243,17,3)
+            pred *= factor# (243,17,3)
+
+            # Root-relative Errors
+            pred = pred - pred[:,0:1,:] # (243,17,3) 减去Pelvis骨盆的
+            gt = gt - gt[:,0:1,:]# (243, 17, 3) 减去Pelvis骨盆的
+            err1 = mpjpe(pred, gt)
+            err2 = p_mpjpe(pred, gt)
+            e1_all[frame_list] += err1
+            e2_all[frame_list] += err2
+            oc[frame_list] += 1
+        for idx in range(num_test_frames):
+            if e1_all[idx] > 0:
+                err1 = e1_all[idx] / oc[idx]
+                err2 = e2_all[idx] / oc[idx]
+                action = actions[idx]
+                results[action].append(err1)
+                results_procrustes[action].append(err2)
+    else:
+        # Multi-clip test-time averaging: average the PREDICTIONS of every overlapping
+        # window that covers a frame (an ensemble), then score once per frame. With
+        # non-overlapping clips (oc==1 everywhere) this reproduces the standard result.
+        # Requires the test data to be generated at the overlapping data_stride_test.
+        n_joints = gt_clips.shape[2]
+        pred_sum = np.zeros((num_test_frames, n_joints, 3))
+        gt_frame = np.zeros((num_test_frames, n_joints, 3))
+        for idx in range(len(action_clips)):
+            source = source_clips[idx][0][:-6]
+            if source in block_list:
+                continue
+            frame_list = frame_clips[idx]
+            factor = factor_clips[idx][:,None,None]
+            gt = gt_clips[idx]
+            pred = results_all[idx] * factor
+            # Root-relative per frame before accumulating
+            pred = pred - pred[:,0:1,:]
+            gt = gt - gt[:,0:1,:]
+            pred_sum[frame_list] += pred
+            gt_frame[frame_list] = gt   # deterministic per global frame
+            oc[frame_list] += 1
+        for action in action_names:
+            amask = (actions == action) & (oc > 0)
+            if not np.any(amask):
+                continue
+            p = pred_sum[amask] / oc[amask][:,None,None]
+            g = gt_frame[amask]
+            # P1: per-frame joint-mean L2 (mean over the action's frames matches e1)
+            results[action].extend(np.mean(np.linalg.norm(p - g, axis=-1), axis=-1).tolist())
+            # P2: Procrustes-aligned over the action's frames (mean is a single scalar)
+            results_procrustes[action].append(p_mpjpe(p, g))
     final_result = []
     final_result_procrustes = []
     summary_table = prettytable.PrettyTable()
@@ -391,7 +451,7 @@ def train_with_config(args, opts):
         instav = InstaVDataset2D()
         instav_loader_2d = DataLoader(instav, **trainloader_params)
         
-    datareader = DataReaderH36M(n_frames=args.clip_len, sample_stride=args.sample_stride, data_stride_train=args.data_stride, data_stride_test=args.clip_len, dt_root = args.data_root, dt_file=args.dt_file)
+    datareader = DataReaderH36M(n_frames=args.clip_len, sample_stride=args.sample_stride, data_stride_train=args.data_stride, data_stride_test=getattr(args, 'data_stride_test', args.clip_len), dt_root = args.data_root, dt_file=args.dt_file)
     min_loss = 100000
     model_backbone = load_backbone(args)
     model_params = 0
@@ -414,7 +474,8 @@ def train_with_config(args, opts):
             chk_filename = opts.evaluate if opts.evaluate else opts.resume
             log.info(f'Loading checkpoint{chk_filename}')
             checkpoint = torch.load(chk_filename, map_location=lambda storage, loc: storage, weights_only=False)
-            missing, unexpected = model_backbone.load_state_dict(checkpoint['model_pos'], strict=False)
+            sd = expand_kgroup_4to8(checkpoint['model_pos'], model_backbone.state_dict())
+            missing, unexpected = model_backbone.load_state_dict(sd, strict=False)
             if missing:
                 log.info(f'Missing keys (ignored): {missing}')
             if unexpected:
@@ -424,7 +485,8 @@ def train_with_config(args, opts):
             chk_filename = os.path.join(opts.pretrained, opts.selection)
             log.info(f'Loading checkpoint{chk_filename}')
             checkpoint = torch.load(chk_filename, map_location=lambda storage, loc: storage, weights_only=False)
-            missing, unexpected = model_backbone.load_state_dict(checkpoint['model_pos'], strict=False)
+            sd = expand_kgroup_4to8(checkpoint['model_pos'], model_backbone.state_dict())
+            missing, unexpected = model_backbone.load_state_dict(sd, strict=False)
             if missing:
                 log.info(f'Missing keys (ignored): {missing}')
             if unexpected:
@@ -441,7 +503,8 @@ def train_with_config(args, opts):
             if args.backbone == 'MotionAGFormer':
                 missing, unexpected = model_backbone.load_state_dict(checkpoint['model'], strict=False)
             else:
-                missing, unexpected = model_backbone.load_state_dict(checkpoint['model_pos'], strict=False)
+                sd = expand_kgroup_4to8(checkpoint['model_pos'], model_backbone.state_dict())
+                missing, unexpected = model_backbone.load_state_dict(sd, strict=False)
             if missing:
                 log.info(f'Missing keys (ignored): {missing}')
             if unexpected:
@@ -451,9 +514,25 @@ def train_with_config(args, opts):
     if args.partial_train:
         model_pos = partial_train_layers(model_pos, args.partial_train)
 
-    if not opts.evaluate:        
+    if not opts.evaluate:
         lr = args.learning_rate
-        optimizer = optim.AdamW(filter(lambda p: p.requires_grad, model_pos.parameters()), lr=lr, weight_decay=args.weight_decay)
+        # Discriminative LR: the zero-init ReZero bfs_gate is the only fresh capacity in
+        # the fused scan and must open within a short fine-tune, so it gets its own (higher)
+        # LR group. gate_lr defaults to base lr when unset (single-group behaviour).
+        gate_lr = getattr(args, 'gate_lr', lr)
+        gate_params, base_params = [], []
+        for name, p in model_pos.named_parameters():
+            if not p.requires_grad:
+                continue
+            (gate_params if name.endswith('bfs_gate') else base_params).append(p)
+        param_groups = [{'params': base_params, 'lr': lr}]
+        if gate_params:
+            param_groups.append({'params': gate_params, 'lr': gate_lr})
+            log.info(f'Discriminative LR: {len(gate_params)} bfs_gate param(s) at lr {gate_lr}, rest at {lr}')
+        optimizer = optim.AdamW(param_groups, lr=lr, weight_decay=args.weight_decay)
+        # Remember each group's base LR so the cosine/exponential schedule scales the two
+        # groups by the SAME factor instead of collapsing both to one value each epoch.
+        base_group_lrs = [g['lr'] for g in optimizer.param_groups]
         lr_decay = args.lr_decay
         st = 0
         accum_steps = getattr(args, 'accum_steps', 1)
@@ -502,17 +581,19 @@ def train_with_config(args, opts):
             losses['angle_velocity'] = AverageMeter()
             N = 0
             
-            # LR schedule
+            # LR schedule — compute one shared factor, then scale each param group by its
+            # own base LR so the discriminative (gate vs base) ratio is preserved every epoch.
             if lr_scheduler == 'cosine':
                 if epoch < warmup_epochs:
-                    lr = args.learning_rate * (epoch + 1) / max(1, warmup_epochs)
+                    factor = (epoch + 1) / max(1, warmup_epochs)
                 else:
                     progress = (epoch - warmup_epochs) / max(1, args.epochs - warmup_epochs)
-                    lr = args.learning_rate * 0.5 * (1.0 + math.cos(math.pi * progress))
+                    factor = 0.5 * (1.0 + math.cos(math.pi * progress))
             else:
-                lr = args.learning_rate * (lr_decay ** (epoch - st))
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = lr
+                factor = lr_decay ** (epoch - st)
+            for i, param_group in enumerate(optimizer.param_groups):
+                param_group['lr'] = base_group_lrs[i] * factor
+            lr = args.learning_rate * factor  # for logging
             
             # Curriculum Learning
             if args.train_2d and (epoch >= args.pretrain_3d_curriculum):

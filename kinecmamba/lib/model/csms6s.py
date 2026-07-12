@@ -253,6 +253,76 @@ class CrossMerge_bfs(torch.autograd.Function):
         xs = xs.view(B, 4, C, H, W)
         return xs
 
+# Fused scan: native (plus_poselimbs, slots 0-3) + BFS kinematic order (slots 4-7).
+# k_group == 8. Directions 0-3 replicate CrossScan_plus_poselimbs exactly so the official
+# checkpoint's dynamics are preserved bit-for-bit; directions 4-7 replicate CrossScan_bfs.
+# The BFS half is gated by a zero-initialized scalar in the SS2D block (see mambablocks.py),
+# so at init the model equals the pure plus_poselimbs model and BFS is a learned residual.
+class CrossScan_fused_bfs(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x: torch.Tensor):
+        B, C, H, W = x.shape
+        assert W == 17, 'the number of joints is not 17'
+        ctx.shape = (B, C, H, W)
+        L = H * W
+        xs = x.new_empty((B, 8, C, L))
+        # slots 0-3 == CrossScan_plus_poselimbs (native order the checkpoint learned)
+        indices = [0, 0, 1, 2, 3, 0, 4, 5, 6, 8, 11, 12, 13, 8, 14, 15, 16]
+        xs[:, 0] = (x + x[..., indices]).flatten(2, 3)
+        xs[:, 1] = x.transpose(dim0=2, dim1=3).flatten(2, 3)
+        xs[:, 2:4] = torch.flip(xs[:, 0:2], dims=[-1])
+        # slots 4-7 == CrossScan_bfs (kinematic-tree joint order)
+        x_perm = x[:, :, :, BFS_ORDER]
+        xs[:, 4] = x_perm.flatten(2, 3)
+        xs[:, 5] = x_perm.transpose(dim0=2, dim1=3).flatten(2, 3)
+        xs[:, 6:8] = torch.flip(xs[:, 4:6], dims=[-1])
+        return xs
+
+    @staticmethod
+    def backward(ctx, ys: torch.Tensor):
+        B, C, H, W = ctx.shape
+        L = H * W
+        # plus_poselimbs adjoint (matches the official backward: the +x[...,indices]
+        # Jacobian term is intentionally omitted to reproduce the pretrained dynamics)
+        a = ys[:, 0:2] + ys[:, 2:4].flip(dims=[-1]).view(B, 2, -1, L)
+        y_pl = a[:, 0] + a[:, 1].view(B, -1, W, H).transpose(dim0=2, dim1=3).contiguous().view(B, -1, L)
+        # BFS adjoint: un-flip, un-transpose, then INV_BFS_ORDER gather (true inverse)
+        b = ys[:, 4:6] + ys[:, 6:8].flip(dims=[-1]).view(B, 2, -1, L)
+        y_bfs = b[:, 0] + b[:, 1].view(B, -1, W, H).transpose(dim0=2, dim1=3).contiguous().view(B, -1, L)
+        y_bfs = y_bfs.view(B, C, H, W)[:, :, :, INV_BFS_ORDER]
+        return (y_pl.view(B, C, H, W) + y_bfs).contiguous()
+
+class CrossMerge_fused_bfs(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, ys: torch.Tensor):
+        B, K, D, H, W = ys.shape  # K == 8
+        ctx.shape = (H, W)
+        ys = ys.view(B, K, D, -1)
+        # native (plus_poselimbs) half
+        a = ys[:, 0:2] + ys[:, 2:4].flip(dims=[-1]).view(B, 2, D, -1)
+        y_pl = a[:, 0] + a[:, 1].view(B, -1, W, H).transpose(dim0=2, dim1=3).contiguous().view(B, D, -1)
+        # BFS half (un-permute joints back to natural order)
+        b = ys[:, 4:6] + ys[:, 6:8].flip(dims=[-1]).view(B, 2, D, -1)
+        y_bfs = b[:, 0] + b[:, 1].view(B, -1, W, H).transpose(dim0=2, dim1=3).contiguous().view(B, D, -1)
+        y_bfs = y_bfs.view(B, D, H, W)[:, :, :, INV_BFS_ORDER].contiguous().view(B, D, -1)
+        return y_pl + y_bfs  # additive fusion
+
+    @staticmethod
+    def backward(ctx, x: torch.Tensor):
+        H, W = ctx.shape
+        B, C, L = x.shape
+        xs = x.new_empty((B, 8, C, L))
+        # native slots 0-3
+        xs[:, 0] = x
+        xs[:, 1] = x.view(B, C, H, W).transpose(dim0=2, dim1=3).flatten(2, 3)
+        xs[:, 2:4] = torch.flip(xs[:, 0:2], dims=[-1])
+        # BFS slots 4-7 (adjoint of the INV_BFS_ORDER un-permute is a BFS_ORDER gather)
+        xb = x.view(B, C, H, W)[:, :, :, BFS_ORDER].contiguous().view(B, C, L)
+        xs[:, 4] = xb
+        xs[:, 5] = xb.view(B, C, H, W).transpose(dim0=2, dim1=3).flatten(2, 3)
+        xs[:, 6:8] = torch.flip(xs[:, 4:6], dims=[-1])
+        return xs.view(B, 8, C, H, W)
+
 class CrossScan_bs_bt(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x: torch.Tensor):
