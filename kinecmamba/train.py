@@ -267,6 +267,18 @@ def evaluate(args, model_pos, test_loader, datareader, layer_hooks=None):
             results[action].extend(np.mean(np.linalg.norm(p - g, axis=-1), axis=-1).tolist())
             # P2: Procrustes-aligned over the action's frames (mean is a single scalar)
             results_procrustes[action].append(p_mpjpe(p, g))
+
+    # Per-subject MPJPE breakdown (diagnostic — e.g. data-leakage / domain-shift checks).
+    # Frame-mean over each subject's covered frames (a quick view, not per-action averaged).
+    if not multiclip:
+        subj = np.array([str(s)[:4] for s in sources])  # 's_09', 's_11', ...
+        for sname in sorted(set(subj.tolist())):
+            m = (subj == sname) & (oc > 0)
+            if np.any(m):
+                p1 = np.mean(e1_all[m] / oc[m])
+                p2 = np.mean(e2_all[m] / oc[m])
+                log.info(f'[subject {sname}] frame-mean MPJPE: {p1:.4f}mm  P-MPJPE: {p2:.4f}mm  ({int(m.sum())} frames)')
+
     final_result = []
     final_result_procrustes = []
     summary_table = prettytable.PrettyTable()
