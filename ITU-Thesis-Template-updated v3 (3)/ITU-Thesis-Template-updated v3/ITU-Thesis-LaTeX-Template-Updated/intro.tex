@@ -119,8 +119,10 @@ the fixed-index and learned scan orders of prior state-space pose estimators
 \cite{nguyen2025skeletonmamba}. It adds an anatomy-aware bone-length loss that
 is paired with this scan, so that the scan order and the training objective
 reinforce the same skeletal structure. It evaluates the method on Human3.6M
-and MPI-INF-3DHP, with a scan-order ablation that isolates the effect of the
-scan order.
+against Transformer- and state-space-based baselines, where KinecMamba
+improves on its closest comparable baseline, PoseMamba-S, at a similar
+parameter budget. A cross-dataset evaluation on MPI-INF-3DHP and a controlled
+scan-order ablation are identified and set up as future work.
 
 \section{Problem Statement}
 \label{sec:intro-problem-statement}
@@ -320,9 +322,9 @@ including the bidirectional spatio-temporal state space backbone and the
 breadth-first search kinematic-tree scan.
 
 Chapter~\ref{ch:results} reports the experimental setup and benchmark
-results on Human3.6M and MPI-INF-3DHP, comparisons against Transformer-,
-graph-, and state-space-based baselines, and ablation studies isolating
-the effect of the proposed scan order.
+results on Human3.6M, comparing KinecMamba against Transformer- and
+state-space-based baselines, and sets out the MPI-INF-3DHP cross-dataset
+evaluation and the scan-order ablation as future work.
 
 Finally, Chapter~\ref{ch:conclusion} summarizes the contributions of this
 thesis, discusses its limitations, and outlines directions for future

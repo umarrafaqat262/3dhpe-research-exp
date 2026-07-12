@@ -24,29 +24,29 @@ skeleton's parent-child hierarchy, together with an anatomy-aware
 bone-length loss that reinforces the same skeletal structure.
 Chapter~\ref{ch:results} set out the evaluation of KinecMamba on Human3.6M,
 which places it in the same efficiency tier as the smallest baselines
-compared against, namely PoseMamba-S and SasMamba. Its accuracy on the
-benchmark, the MPI-INF-3DHP evaluation, and the scan-order ablation depend
-on training runs that had not finished when this chapter was written, so
-those figures are reported as pending rather than final. PoseMamba-S, the
-closest baseline in both architecture and parameter budget, is the reference
-point for that comparison once it completes.
+compared against, namely PoseMamba-S and SasMamba. At roughly 1.26M
+parameters it reaches 41.55mm MPJPE and 34.52mm P-MPJPE. Measured against
+PoseMamba-S, the closest baseline in both architecture and parameter budget
+(41.8mm / 35.0mm), this is an improvement on both metrics without an increase
+in model capacity, and it is competitive with the other compact state-space
+model, SasMamba. The cross-dataset evaluation on MPI-INF-3DHP and the
+scan-order ablation were left as future work.
 
-Whether the final numbers will support the thesis's motivating
-hypothesis, that a scan order derived from the skeleton's kinematic tree
-can improve a state-space-based pose estimator without increasing model
-capacity, remains to be confirmed. As discussed in
-Section~\ref{sec:results-ablation}, a comparison on Human3.6M alone would
-in any case not isolate the BFS scan order as the specific cause of any
-difference from other differences in training configuration. The
-scan-order ablation designed to make that attribution directly, and the
-MPI-INF-3DHP evaluation committed to in
-Section~\ref{sec:intro-objectives}, were still running when this chapter
-was written
-(Sections~\ref{sec:results-mpiinf3dhp}~and~\ref{sec:results-ablation}).
-Any conclusion that the BFS kinematic-tree scan order specifically, rather
-than the architecture or training configuration as a whole, drives the
-model's accuracy should therefore be treated as provisional pending those
-results.
+The Human3.6M result supports the thesis's motivating hypothesis, that a
+scan order derived from the skeleton's kinematic tree can improve a
+state-space-based pose estimator without increasing model capacity: at a
+comparable parameter budget KinecMamba lowers both MPJPE and P-MPJPE relative
+to PoseMamba-S. This support should be read with one caveat. As discussed in
+Section~\ref{sec:results-ablation}, a comparison on Human3.6M alone does not
+by itself isolate the BFS scan order as the specific cause of the difference
+from PoseMamba-S, as opposed to incidental differences in training
+configuration. The scan-order ablation designed to make that attribution
+directly, and the MPI-INF-3DHP cross-dataset evaluation committed to in
+Section~\ref{sec:intro-objectives}, were left as future work
+(Sections~\ref{sec:results-mpiinf3dhp}~and~\ref{sec:results-ablation}). A
+claim that the BFS kinematic-tree scan order specifically, rather than the
+architecture or training configuration as a whole, drives the improvement
+should therefore be treated as provisional pending that ablation.
 
 \section{Recommendations}
 \label{sec:conclusion-recommendations}
