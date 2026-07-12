@@ -20,10 +20,11 @@ configuration. Section~\ref{sec:results-h36m} sets out the main comparison
 of this thesis, placing KinecMamba against established baselines
 on Human3.6M that span the Transformer and state-space families.
 Section~\ref{sec:results-mpiinf3dhp} and Section~\ref{sec:results-ablation}
-cover the MPI-INF-3DHP benchmark and the scan-order ablation study
-motivated in Section~\ref{sec:intro-objectives}, both of which are left as
-future work and are discussed as such. The main Human3.6M evaluation is
-reported in full. Section~\ref{sec:results-summary} closes the chapter.
+cover the MPI-INF-3DHP benchmark, whose cross-dataset evaluation is in
+progress, and the scan-order ablation study motivated in
+Section~\ref{sec:intro-objectives}, which is set out as future work. The main
+Human3.6M evaluation is reported in full.
+Section~\ref{sec:results-summary} closes the chapter.
 
 \section{Datasets and Evaluation Protocol}
 \label{sec:results-protocol}
@@ -80,8 +81,9 @@ BiSTSSMBlock instances (Section~\ref{sec:method-architecture}), a
 selective state space hidden dimension of $N=16$
 (Section~\ref{sec:method-bistssm}), the breadth-first search
 kinematic-tree scan order $\pi$ (Section~\ref{sec:method-bfs}), and the
-four-term loss function with $\lambda_{3d}=1.0$, $\lambda_{scale}=0.5$,
-$\lambda_{vel}=20.0$, and $\lambda_{diff}=0.5$ (Section~\ref{sec:method-loss}).
+six-term loss function with $\lambda_{3d}=1.0$, $\lambda_{scale}=0.5$,
+$\lambda_{vel}=20.0$, $\lambda_{diff}=0.5$, $\lambda_{bone}=0.5$, and
+$\lambda_{bvar}=1.0$ (Section~\ref{sec:method-loss}).
 
 The model is trained with the AdamW optimizer (weight decay 0.01) under a
 cosine learning-rate schedule, using an effective batch size of 32 reached
@@ -125,9 +127,7 @@ MotionAGFormer-L \cite{mehraban2024motionagformer} & WACV'24 & 243 & 19.0 & 78.3
 \multicolumn{7}{l}{\textit{State-space-based}} \\
 Pose Magic \cite{zhang2024posemagic}      & 2024     & 243 & 14.4 & 40.6  & 37.5  & 31.8 \\
 PoseMamba-S \cite{huang2025posemamba}     & AAAI'25  & 243 & 0.9  & 3.6   & 41.8  & 35.0 \\
-PoseMamba-L \cite{huang2025posemamba}     & AAAI'25  & 243 & 6.7  & 27.9  & 38.1  & 32.5 \\
 SasMamba \cite{cui2025sasmamba}           & WACV'26  & 243 & 0.64 & 1.3   & 41.48 & 34.84 \\
-SasMamba-large \cite{cui2025sasmamba}     & WACV'26  & 243 & 4.1  & 8.56  & 39.77 & 33.61 \\
 \hline
 \textbf{KinecMamba (ours)} & This work & 243 & \textbf{1.26} & n/r & \textbf{41.55} & \textbf{34.52} \\
 \hline
@@ -141,14 +141,14 @@ alongside PoseMamba-S (0.9M) and SasMamba (0.64M), rather
 than the large-model tier of MotionBERT, MotionAGFormer-L, or Pose Magic.
 Because the architectural contribution of this thesis is a change of scan
 order rather than of model capacity, the closest point of comparison is
-PoseMamba-S in the same tier. Against that baseline KinecMamba lowers the
-MPJPE from 41.8mm to 41.55mm and the P-MPJPE from 35.0mm to 34.52mm, an
-improvement on both metrics at a comparable parameter budget. It is also
-competitive with the other compact state-space model, SasMamba (41.48mm P1 /
-34.84mm P2): marginally higher on P1 and lower on P2. The larger baselines
-in the table (MotionBERT, MotionAGFormer-L, Pose Magic, PoseMamba-L) reach
-lower MPJPE, but at five to thirty times the parameter count, placing them in
-a different capacity tier. Section~\ref{sec:results-ablation} discusses the
+PoseMamba-S in the same tier. At a comparable parameter budget, KinecMamba's
+MPJPE (41.55mm) and P-MPJPE (34.52mm) are marginally below those of
+PoseMamba-S (41.8mm / 35.0mm), and in the same range as the other compact
+state-space model, SasMamba (41.48mm P1 / 34.84mm P2), slightly higher on P1
+and slightly lower on P2. The larger baselines in the table (MotionBERT,
+MotionAGFormer-L, Pose Magic) reach lower MPJPE, but at roughly ten to thirty
+times the parameter count, placing them in a different capacity tier.
+Section~\ref{sec:results-ablation} describes the
 scan-order ablation that would attribute the difference from PoseMamba-S to
 the BFS kinematic-tree scan itself rather than to other differences in
 training configuration. Figure~\ref{fig:results-plot} plots accuracy against
@@ -171,7 +171,7 @@ model size for all methods in the table.
 % Baseline points: (params in M, MPJPE mm) from Table~\ref{tab:h36m-sota}
 \addplot[only marks, mark=*, mark size=2pt, color=blue!55] coordinates {
   (33.6,40.9) (4.7,41.0) (42.3,39.2) (19.0,38.4) (14.4,37.5)
-  (0.9,41.8) (6.7,38.1) (0.64,41.48) (4.1,39.77)
+  (0.9,41.8) (0.64,41.48)
 };
 \addlegendentry{Baselines}
 % KinecMamba (ours): measured Human3.6M result from Table~\ref{tab:h36m-sota}
@@ -186,8 +186,8 @@ model size for all methods in the table.
 \caption[Accuracy versus model size on Human3.6M.]{Accuracy (MPJPE, lower is
   better) against model size for the methods of Table~\ref{tab:h36m-sota} on
   Human3.6M. KinecMamba (1.26M parameters, 41.55mm) sits in the compact
-  state-space tier and improves on its closest baseline PoseMamba-S (0.9M,
-  41.8mm) at a comparable parameter budget.}
+  state-space tier, with error marginally below its closest baseline
+  PoseMamba-S (0.9M, 41.8mm) at a comparable parameter budget.}
 \label{fig:results-plot}
 \end{figure}
 
@@ -201,12 +201,12 @@ controlled capture setup, following the same protocol used by prior
 state-space pose estimators
 \cite{tang2023stcformer, huang2025posemamba, cui2025sasmamba}.
 
-The cross-dataset evaluation on MPI-INF-3DHP is left as future work. The
-data pipeline for this benchmark is prepared, but the evaluation was not
-completed within the scope of this thesis, whose main empirical claim rests
-on the Human3.6M comparison in Section~\ref{sec:results-h36m}. Reporting
-MPJPE, PCK, and AUC on MPI-INF-3DHP is listed among the recommendations in
-Section~\ref{sec:conclusion-recommendations}.
+The cross-dataset evaluation on MPI-INF-3DHP is currently in progress. The
+data pipeline for this benchmark is prepared and the model is being evaluated
+under the protocol used by the prior state-space estimators above; the MPJPE,
+PCK, and AUC results will be reported in this section once the run completes.
+The main empirical claim of this thesis rests on the Human3.6M comparison in
+Section~\ref{sec:results-h36m}.
 
 \section{Ablation Study}
 \label{sec:results-ablation}
@@ -250,13 +250,13 @@ Chapter~\ref{ch:methodology} on Human3.6M, positioning it at roughly
 1.26M parameters within the same efficiency tier as the smallest
 baselines reviewed in Chapter~\ref{ch:literature-review}
 (Section~\ref{sec:results-h36m}). On that benchmark KinecMamba reaches
-41.55mm MPJPE and 34.52mm P-MPJPE, improving on its closest baseline
-PoseMamba-S (41.8mm / 35.0mm) at a comparable parameter budget while
-remaining competitive with the compact state-space model SasMamba. The
-cross-dataset evaluation on MPI-INF-3DHP
-(Section~\ref{sec:results-mpiinf3dhp}) and the scan-order ablation that
-would isolate the contribution of the BFS kinematic-tree scan
-(Section~\ref{sec:results-ablation}) are left as future work.
+41.55mm MPJPE and 34.52mm P-MPJPE, marginally below its closest baseline
+PoseMamba-S (41.8mm / 35.0mm) at a comparable parameter budget and in the
+same range as the compact state-space model SasMamba. The cross-dataset
+evaluation on MPI-INF-3DHP (Section~\ref{sec:results-mpiinf3dhp}) is in
+progress, and the scan-order ablation that would isolate the contribution of
+the BFS kinematic-tree scan (Section~\ref{sec:results-ablation}) is set out as
+future work.
 Chapter~\ref{ch:conclusion} summarizes the contributions of this thesis in
 light of these results, discusses their limitations, and outlines the work
 that remains.

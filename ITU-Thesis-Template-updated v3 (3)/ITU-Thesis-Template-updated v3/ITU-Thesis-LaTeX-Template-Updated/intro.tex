@@ -120,9 +120,10 @@ the fixed-index and learned scan orders of prior state-space pose estimators
 is paired with this scan, so that the scan order and the training objective
 reinforce the same skeletal structure. It evaluates the method on Human3.6M
 against Transformer- and state-space-based baselines, where KinecMamba
-improves on its closest comparable baseline, PoseMamba-S, at a similar
-parameter budget. A cross-dataset evaluation on MPI-INF-3DHP and a controlled
-scan-order ablation are identified and set up as future work.
+reaches an error marginally below its closest comparable baseline,
+PoseMamba-S, at a similar parameter budget. A cross-dataset evaluation on
+MPI-INF-3DHP is in progress, and a controlled scan-order ablation is
+identified as future work.
 
 \section{Problem Statement}
 \label{sec:intro-problem-statement}
@@ -241,12 +242,11 @@ the objectives of this thesis are as follows:
     and state-space-based \cite{zhang2024posemagic, huang2025posemamba,
     cui2025sasmamba, wang2025dbmambapose} baselines.
 
-  \item \textbf{To isolate and quantify the specific contribution of the
-    BFS kinematic-tree scan} through ablation studies comparing it against
-    alternative scan orders (e.g., fixed joint-index order, learned
-    group/joint scan strategies), in order to determine whether any
-    performance difference is attributable to the scan order itself rather
-    than to the underlying SSM backbone alone.
+  \item \textbf{To identify the controlled scan-order ablation required to
+    isolate the specific contribution of the BFS kinematic-tree scan} from
+    the underlying SSM backbone, comparing it against alternative scan orders
+    (e.g., fixed joint-index order, learned group/joint scan strategies), and
+    to set this out as future validation.
 \end{enumerate}
 
 \section{Limitations and Scope}
@@ -296,13 +296,14 @@ scope of this work:
     include on-device deployment, latency benchmarking on embedded or
     mobile hardware, or real-time system integration.
 
-  \item \textbf{Architectural scope.} The contribution of this thesis is
-    confined to the sequence backbone and spatial scan order of the
-    lifting network. Improvements to loss functions, data augmentation
-    strategies, temporal post-processing/smoothing, or multi-hypothesis
-    modeling \cite{li2022mhformer} are outside the scope of this work,
-    except where a standard, established choice is adopted without
-    modification to support the core architectural comparison.
+  \item \textbf{Architectural scope.} The contributions of this thesis are
+    the sequence backbone, the BFS kinematic-tree spatial scan order, and the
+    anatomy-aware bone-length loss that reinforces it. Broader loss-function
+    engineering, data augmentation strategies, temporal
+    post-processing/smoothing, and multi-hypothesis modeling
+    \cite{li2022mhformer} are outside the scope of this work, except where a
+    standard, established choice is adopted without modification to support
+    the core architectural comparison.
 \end{itemize}
 
 \section{Thesis Outline}

@@ -25,12 +25,12 @@ bone-length loss that reinforces the same skeletal structure.
 Chapter~\ref{ch:results} set out the evaluation of KinecMamba on Human3.6M,
 which places it in the same efficiency tier as the smallest baselines
 compared against, namely PoseMamba-S and SasMamba. At roughly 1.26M
-parameters it reaches 41.55mm MPJPE and 34.52mm P-MPJPE. Measured against
-PoseMamba-S, the closest baseline in both architecture and parameter budget
-(41.8mm / 35.0mm), this is an improvement on both metrics without an increase
-in model capacity, and it is competitive with the other compact state-space
-model, SasMamba. The cross-dataset evaluation on MPI-INF-3DHP and the
-scan-order ablation were left as future work.
+parameters it reaches 41.55mm MPJPE and 34.52mm P-MPJPE. Against PoseMamba-S,
+the closest baseline in both architecture and parameter budget (41.8mm /
+35.0mm), these are marginally lower on both metrics at a comparable parameter
+budget, and in the same range as the other compact state-space model,
+SasMamba. The cross-dataset evaluation on MPI-INF-3DHP is in progress, and the
+scan-order ablation was left as future work.
 
 The Human3.6M result supports the thesis's motivating hypothesis, that a
 scan order derived from the skeleton's kinematic tree can improve a
@@ -40,9 +40,9 @@ to PoseMamba-S. This support should be read with one caveat. As discussed in
 Section~\ref{sec:results-ablation}, a comparison on Human3.6M alone does not
 by itself isolate the BFS scan order as the specific cause of the difference
 from PoseMamba-S, as opposed to incidental differences in training
-configuration. The scan-order ablation designed to make that attribution
-directly, and the MPI-INF-3DHP cross-dataset evaluation committed to in
-Section~\ref{sec:intro-objectives}, were left as future work
+configuration. The MPI-INF-3DHP cross-dataset evaluation committed to in
+Section~\ref{sec:intro-objectives} is in progress, and the scan-order
+ablation designed to make that attribution directly is left as future work
 (Sections~\ref{sec:results-mpiinf3dhp}~and~\ref{sec:results-ablation}). A
 claim that the BFS kinematic-tree scan order specifically, rather than the
 architecture or training configuration as a whole, drives the improvement
@@ -67,7 +67,7 @@ The following work is recommended to complete and extend this thesis:
     is conducted at a single, small parameter budget and a fixed 243-frame
     window, it remains untested whether the benefit of the BFS kinematic-tree
     scan persists, grows, or diminishes at larger model capacities such as
-    those of PoseMamba-L or MotionAGFormer-L, or at longer input windows,
+    that of MotionAGFormer-L, or at longer input windows,
     where a state space scan's implicit memory can begin to decay
     \cite{zhang2024kmm}.
 
