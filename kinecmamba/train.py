@@ -57,9 +57,15 @@ class EMA:
     while the raw weights keep training. No effect unless use_ema is enabled."""
     def __init__(self, model, decay=0.999):
         self.decay = decay
-        # shadow only floating-point params/buffers (skip int counters like num_batches_tracked)
+        # shadow only floating-point params/buffers (skip int counters like num_batches_tracked).
+        # Also EXCLUDE the zero-init ReZero bfs_gate: it grows monotonically from 0, and an EMA
+        # of a monotonically-growing quantity always lags below its current value, which would
+        # suppress the very kinematic-branch signal the fine-tune is trying to grow (worst case,
+        # the averaged gate stays ~0 and the eval never sees the improvement). Leaving the gate
+        # out of the shadow means the EMA-evaluated model uses the smoothed base weights with the
+        # live, fully-trained gate. Harmless when no gate exists (v2_bfs / plus_poselimbs).
         self.shadow = {k: v.detach().clone() for k, v in model.state_dict().items()
-                       if v.dtype.is_floating_point}
+                       if v.dtype.is_floating_point and not k.endswith('bfs_gate')}
 
     @torch.no_grad()
     def update(self, model):

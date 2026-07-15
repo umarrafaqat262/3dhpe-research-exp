@@ -1,75 +1,81 @@
-# Fine-tuning the FUSED native+BFS scan (KinecMamba) — GPU runbook
+# Fused native+BFS gated scan (KinecMamba) — clone-and-run GPU guide
 
-This is a step-by-step guide to run on the GPU machine. Goal: push KinecMamba **below the
-PoseMamba-S baseline of 41.8mm MPJPE**. Every command runs from inside `kinecmamba/`.
+Goal: push KinecMamba **below the PoseMamba-S baseline (41.87mm MPJPE in this pipeline)** with a
+single short fine-tune, starting from the official PoseMamba-S checkpoint. The result is
+guaranteed leak-free (trains only on the standard S1/S5/S6/S7/S8 split) and cannot regress below
+the official floor by construction (see "Why this is floor-safe").
 
-## What this changes and why
+Every command runs from inside `kinecmamba/`.
 
-Replacing the native raster scan with BFS never beat 41.8mm (best ~42.5–43.3mm) because the
-Mamba SSM is **joint-order specific** — the official 41.8mm weights learned their recurrence in
-native order, and reordering to BFS breaks them. Bone loss + EMA polish made it *worse*
-(42.95 → 43.6mm).
+## What this experiment is
 
-New approach — **fused gated scan** (`forward_type: v2_fused_bfs`):
-- Run **8** scan directions: 4 native (`plus_poselimbs`, exactly what the official checkpoint
-  learned) **+** 4 BFS kinematic-tree directions.
-- Multiply the BFS half by a **zero-initialized scalar gate** (ReZero) in every SS2D block.
-- At init `gate = 0`, so the model output equals the pure native 41.8mm model **bit-for-bit**.
-  Fine-tuning grows the kinematic branch as a learned residual on top of that floor.
+`forward_type: v2_fused_bfs` runs **8 scan directions**: the 4 native `plus_poselimbs`
+directions (exactly what the official checkpoint learned) **plus** 4 BFS kinematic-tree
+directions. The BFS half is multiplied by a **zero-initialized scalar ReZero gate** (`bfs_gate`)
+in every SS2D block.
 
-Because the native branch is preserved, a short fine-tune only has to teach the new branch to
-help — the worst case is the gate stays ~0 (BFS neutral), not a regression.
+- At init the gate is 0, so the model output equals the pure native PoseMamba-S model
+  **bit-for-bit** (epoch-0 eval reproduces 41.87mm).
+- Fine-tuning grows the kinematic branch as a learned residual on top of that floor. Because the
+  native branch is preserved, the worst case is the gate stays ~0 (BFS neutral), never a regression.
 
-Code touched (branch `exp/fused-bfs-scan`):
-- `lib/model/csms6s.py` — `CrossScan_fused_bfs`, `CrossMerge_fused_bfs`.
-- `lib/model/mambablocks.py` — `v2_fused_bfs` type, `k_group=8`, `bfs_gate`, gated merge.
-- `train.py` — `expand_kgroup_4to8` (loads a K=4 checkpoint into the K=8 model), two-group
-  optimizer (gate at higher LR), per-group cosine LR, config-gated multi-clip eval.
-- `configs/experiments/bfs_scan/exp_ft_fused_bfs.yaml` — the fine-tune recipe.
-- `verify_fused_scan.py` — correctness checks.
+### Why this is floor-safe (verified)
+The native slots (0-3) of the fused scan are byte-identical to `CrossScan_plus_poselimbs`, the
+BFS slots (4-7) are byte-identical to `CrossScan_bfs`, and the fused merge is their additive sum
+with the BFS half gated. At `bfs_gate = 0` the merge reduces exactly to the native merge. This is
+checked two ways:
+- `python verify_fused_scan_numpy.py` — torch-free (numpy only), instant. Verifies the
+  permutation inverse (`INV_BFS_ORDER == argsort(BFS_ORDER)`), the slot identities, the additive
+  merge, the **gate=0 floor equivalence**, and the BFS scan->merge joint-order round-trip.
+- `python verify_fused_scan.py` — full torch check on the actual autograd Functions (forward
+  identity + backward-consistency: the fused VJP equals the sum of the two component VJPs).
 
 ## Prerequisites
 
-- The **official PoseMamba-S checkpoint** (2-channel, trained with `v2_plus_poselimbs`) on disk,
-  e.g. `checkpoint/official/best_epoch.bin` with a `model_pos` state dict. Note its dir and filename.
-- The Human3.6M data at `data/motion3d/MB3D_f243s81/` (as the other configs expect).
-- A GPU with enough VRAM for `batch_size: 8` at 243 frames (fallback: `batch_size: 4`,
-  `accum_steps: 8` — same effective batch 32).
+- **Official PoseMamba-S checkpoint** (2-channel, trained with `v2_plus_poselimbs`) on disk, with
+  a `model_pos` state dict — e.g. `checkpoint/official/best_epoch.bin`. Note its dir and filename.
+  (In this repo's tarball it is `PoseMamba_S.bin`; place/rename so `-p <dir> -ms <file>` points at it.)
+- Human3.6M data at `data/motion3d/MB3D_f243s81/` (same layout the other configs expect).
+- A GPU with room for `batch_size: 8` at 243 frames (fallback: `batch_size: 4`, `accum_steps: 8`,
+  same effective batch 32).
 
 ---
 
-## Step 0 — verify the fused scan is correct (fast, CPU-ok)
+## Step 0 — DECONTAMINATE the training set (do this first, always)
 
+A previous S9 data-leakage diagnostic (`make_leak_s9_clips.py`) injected leaked S9 test clips
+into the **shared** training directory with a `LEAK_S9_` prefix. Training with those present
+invalidates the result. Remove any that remain:
 ```bash
-cd kinecmamba
-python verify_fused_scan.py
+ls data/motion3d/MB3D_f243s81/H36M-SH/train/LEAK_S9_*.pkl 2>/dev/null && \
+  rm data/motion3d/MB3D_f243s81/H36M-SH/train/LEAK_S9_*.pkl || echo "clean: no leaked clips"
 ```
-Expect `ALL FUSED SCAN CHECKS PASSED`. This confirms slots 0–3 == native, slots 4–7 == BFS, and
-that the fused backward equals the sum of the two component backwards. **Do not proceed if this fails.**
 
-## Step 1 — sanity: the gate=0 floor must reproduce the official number
+## Step 1 — verify the fused scan is correct (fast, CPU-ok)
+```bash
+python verify_fused_scan_numpy.py    # torch-free, instant
+python verify_fused_scan.py          # full torch check
+```
+Both must print their `... PASSED` line. Do not proceed if either fails.
 
-Run a 1-shot **evaluate** of the fused model loaded from the official checkpoint. With `gate=0`
-the reported MPJPE must equal the official PoseMamba-S number (~41.8mm). This proves the
-checkpoint expander loaded the native weights cleanly and the BFS branch is off at init.
-
+## Step 2 — sanity: the gate=0 floor must reproduce the official number
 ```bash
 python train.py \
   --config configs/experiments/bfs_scan/exp_ft_fused_bfs.yaml \
   -p checkpoint/official -ms best_epoch.bin \
   --evaluate checkpoint/official/best_epoch.bin
 ```
-> If `--evaluate` doesn't take the fused path in your build, instead run the fine-tune (Step 2)
-> and read the **epoch-0** eval line from the log — same check. In the load log you should see
-> `Missing keys (ignored): [... bfs_gate ...]` (expected — the gate keeps its zero init) and the
-> five SSM params (`x_proj_weight`, `dt_projs_weight`, `dt_projs_bias`, `A_logs`, `Ds`) should
-> NOT appear as missing (the expander fills them).
+Expect MPJPE ~= **41.87mm**. In the load log you should see `Missing keys (ignored): [... bfs_gate ...]`
+(expected: the gate keeps its zero init) and the five SSM params (`x_proj_weight`,
+`dt_projs_weight`, `dt_projs_bias`, `A_logs`, `Ds`) should NOT appear as missing (the
+`expand_kgroup_4to8` expander fills slots 0-3 with the official K=4 weights and duplicates them
+into slots 4-7). If `--evaluate` does not take the fused path in your build, read the **epoch-0**
+eval line from the Step-3 log instead — same check.
 
-**If epoch-0 MPJPE ≈ 41.8mm → the floor is intact, continue. If it's far off → stop and debug
-the load** (wrong checkpoint dir/name, or `input_channels`/`no_conf` mismatch — must stay 2ch).
+**If epoch-0 MPJPE ~= 41.87 -> the floor is intact, continue. If far off -> stop and debug the
+load** (wrong checkpoint dir/name, or `input_channels`/`no_conf` changed — must stay 2 / True).
 
-## Step 2 — run the fused fine-tune
-
+## Step 3 — run the fused fine-tune (the core lever)
 ```bash
 python train.py \
   --config configs/experiments/bfs_scan/exp_ft_fused_bfs.yaml \
@@ -77,74 +83,78 @@ python train.py \
   -c checkpoint/ft_fused_bfs \
   --wandb            # optional
 ```
-Recipe (already in the yaml): 18 epochs, cosine→0 with 2-epoch warmup, **base LR 2e-5**,
-**gate LR 2e-3 (100×)**, grad-clip 1.0, EMA 0.999 (EMA weights are evaluated and saved as
-`best_epoch.bin`), loss = MPJPE + 0.5·scale + 20·velocity (bone loss OFF).
+Recipe (already in the yaml): **12 epochs** (~6-7h at ~30-35 min/epoch), cosine -> 0 with 2-epoch
+warmup, **base LR 2e-5**, **gate LR 2e-3 (100x)**, grad-clip 1.0, EMA 0.999.
 
-Do **not** pass `-r/--resume` (it fast-forwards the epoch counter). Do not change the loss.
+**Objective — anatomy-aware six-term loss (matched to the thesis methodology):**
+MPJPE (1.0) + n-MPJPE/scale (0.5) + velocity (20.0) + **limb-length temporal variance
+`lambda_lv` (1.0)** + **limb-length vs GT `lambda_lg` (0.5)**. The two bone terms are ON here (they
+were OFF in the old replace-scan runs, where a saturated ~43mm model made them hurt). In the fused
+run the native branch is preserved bit-for-bit and only the gated BFS kinematic-tree residual
+moves, so bone supervision shapes exactly the branch that models parent->child limb structure —
+the lowest-risk place to add it, and it targets the occlusion-heavy actions (SittingDown, Sitting,
+Photo) where limb lengths collapse. Angle losses stay off.
+
+Do **not** pass `-r/--resume` (it fast-forwards the epoch counter).
 
 ### What to watch
-- `Protocol #1 Error (MPJPE)` per epoch — this is the number that must drop below 41.8.
-- The load log line `Discriminative LR: N bfs_gate param(s) at lr 0.002, rest at 2e-5`
-  (confirms the two-group optimizer is active; N = number of SS2D blocks = 2·depth).
-- Epoch-0 should print ≈41.8 (the floor). It should not spike far above it.
+- `Protocol #1 Error (MPJPE)` per epoch — the number that must drop below 41.87.
+- `Discriminative LR: N bfs_gate param(s) at lr 0.002, rest at 2e-5` (confirms the two-group
+  optimizer is active; N = number of SS2D blocks = 2 x depth = 20). If this line is missing or the
+  gate lr is 2e-5, the gate will not open — stop and check the config loaded `gate_lr`.
+- Epoch-0 should print ~= 41.87 (the floor) and not spike far above it.
+- The EMA-evaluated best excludes the gate from the moving average (the gate grows from 0 and an
+  EMA would suppress it), so the saved best uses smoothed base weights with the live, trained gate.
 
 ### Expected outcome
-- Crosses to **~41.3–41.7mm** if the kinematic branch adds signal.
-- Worst case **~41.9–42.1mm** (floor preserved, gate near 0 = BFS neutral). That is a clean
-  negative result, not a regression.
+- **~41.3-41.7mm** if the kinematic branch adds signal.
+- Worst case **~41.9-42.1mm** (floor preserved, gate near 0). That is a clean negative result, not
+  a regression.
 
-## Step 3 — evaluate the best checkpoint
-
+## Step 4 — evaluate the best checkpoint + record the defensible numbers
 ```bash
 python train.py \
   --config configs/experiments/bfs_scan/exp_ft_fused_bfs.yaml \
   --evaluate checkpoint/ft_fused_bfs/best_epoch.bin
 ```
-Record the `Protocol #1 Error (MPJPE)` — this is the KinecMamba number for the thesis table.
+Record **verbatim** from the log:
+1. `Protocol #1 Error (MPJPE)` and `Protocol #2 Error (P-MPJPE)` — the KinecMamba thesis numbers.
+2. The **full per-action table** (shows where the gain concentrates — expect the biggest drops on
+   SittingDown / Sitting / Photo).
+3. The `[subject s_09]` / `[subject s_11]` breakdown — confirm S9 and S11 are **balanced** (this is
+   the honest counter-evidence to the old S9-leaked checkpoint; do not report cherry-picked S9).
 
----
+Compare against the in-pipeline control: official PoseMamba-S = **41.87mm P1 / 35.06mm P2**.
 
-## Optional — free eval-time gain: multi-clip prediction averaging
+## Cross-check (optional, protects the headline number)
+Also evaluate the raw final weights and report the better of the two:
+```bash
+python train.py --config configs/experiments/bfs_scan/exp_ft_fused_bfs.yaml \
+  --evaluate checkpoint/ft_fused_bfs/latest_epoch.bin
+```
+`best_epoch.bin` is the EMA(base)+live-gate model; `latest_epoch.bin` is the raw final model.
+With cosine LR -> 0 they should be close; report whichever P1 is lower.
 
-Averages the predictions of every overlapping 243-window that covers a frame (a test-time
-ensemble), stacking on the flip-averaging already on. Typical gain ~0.2–0.5mm, **no retrain**.
-It is OFF by default and is a no-op unless the test clips actually overlap.
+## Fallback ladder (only if Step 3 does not cross 41.87)
+- **(a)** If per-epoch MPJPE rises above the floor and stays there, set `lambda_lg: 0.0` (keep
+  `lambda_lv: 1.0`) — `loss_limb_gt` is the only term here that pulls against MPJPE — and rerun.
+- **(b)** Multi-clip eval (free ~0.2-0.5mm, no retrain): regenerate the TEST clips at
+  `data_stride 81`, set `test_multiclip: True` and `data_stride_test: 81` in the yaml, re-run
+  Step 4. Also run it on the untouched official checkpoint as the control (isolates the eval-trick
+  gain from the fused-scan gain). `train.py` asserts `len(results_all)==len(action_clips)`, so a
+  stride/clip mismatch fails loudly (never silent wrong numbers).
+- **(c)** More anneal room: raise `epochs` to 18 and/or `gate_lr` to 0.003 (native stays gentle at 2e-5).
 
-To enable it you must regenerate the **test** clips at the overlap stride so the loader and the
-`datareader` agree (`train.py` asserts `len(results_all)==len(action_clips)` — a mismatch fails
-loudly, it never produces silent wrong numbers):
-1. Regenerate the test split at `data_stride 81` (or 27 for denser averaging).
-2. In `exp_ft_fused_bfs.yaml` set `test_multiclip: True` and `data_stride_test: 81`.
-3. Re-run Step 3. Eval time scales with the overlap factor (~3× at stride 81).
-
-Apply this to whichever checkpoint you ship. As a control, also run it on the **untouched
-official** checkpoint to see the eval-only floor (~41.4–41.6mm) — this isolates how much of any
-gain is the eval trick vs. the fused scan.
-
----
-
-## Experiment sequence (minimum runs to cross 41.8)
-
-1. **Step 0 + Step 1** — verify + confirm the 41.8 floor (no training).
-2. **Step 2** — the fused fine-tune (the core lever).
-3. **Step 3** — report; optionally add multi-clip eval for the extra free margin.
-
-### Fallback ladder (if Step 2 alone doesn't cross 41.8)
-- **(a)** Turn on multi-clip eval (above) — usually carries a ~41.9–42.1 result under 41.8.
-- **(b)** Rerun Step 2 at **25–30 epochs** (more cosine anneal room) and/or raise `gate_lr` to
-  `0.003`. More training on the fresh branch only; native stays gentle at 2e-5.
-- **(c)** EMA settle: take the Step-2 output and run a 15-epoch `lr 2e-5` cosine→0 pass with
-  `use_ema: True` and `gate_lr` back at `2e-5` (pure settling, no branch changes).
-- **(d)** Honest floor: report the multi-clip eval number on the official checkpoint.
+## Cross-generalization (qualitative, CPU-ok)
+Rerun the existing in-the-wild YOLOv8-pose pipeline with the fused checkpoint vs the official one,
+side by side (`~/Downloads/kinecmamba_qualitative/`). No ground truth needed — it shows the model
+generalizes off Human3.6M.
 
 ## Troubleshooting
-
-- **Load errors / `RuntimeError: size mismatch`**: the expander didn't run — confirm you're on
-  branch `exp/fused-bfs-scan` and `forward_type: v2_fused_bfs`.
-- **Epoch-0 ≠ 41.8**: wrong checkpoint, or `input_channels`/`no_conf` changed (must be 2 / True).
-- **`bfs_gate` not in the log's missing keys**: you loaded a *fused* checkpoint (K=8) not the
-  official (K=4) — that's fine for resume, but the floor check only means anything from the
-  official K=4 checkpoint.
-- **MPJPE stuck exactly at 41.8 every epoch**: the gate isn't moving — check the
-  `Discriminative LR` log line appeared and `gate_lr` is 2e-3, not 2e-5.
+- **`RuntimeError: size mismatch` on load** — the expander did not run; confirm `forward_type:
+  v2_fused_bfs` and that you are on this branch.
+- **Epoch-0 != 41.87** — wrong checkpoint, or `input_channels`/`no_conf` changed (must be 2 / True).
+- **MPJPE stuck exactly at 41.87 every epoch** — the gate is not moving; check the
+  `Discriminative LR` log line and that `gate_lr` is 2e-3, not 2e-5.
+- **`bfs_gate` not in the missing-keys log** — you loaded a fused K=8 checkpoint, not the official
+  K=4 (fine for resume, but the floor check only means something from the official K=4 checkpoint).

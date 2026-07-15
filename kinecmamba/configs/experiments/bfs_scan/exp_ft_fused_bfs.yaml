@@ -25,9 +25,12 @@ no_eval: False
 finetune: True            # load the official checkpoint via -p/-ms, train fresh epochs
 partial_train: null
 
-# Training — short low-LR fine-tune, cosine annealed to ~0
-epochs: 18
-checkpoint_frequency: 5
+# Training — short low-LR fine-tune, cosine annealed to ~0.
+# 12 epochs fits a ~6-7h GPU budget at ~30-35 min/epoch. best_epoch.bin is written every time
+# MPJPE improves, so the run can be stopped early at any point without losing the best model.
+# If more GPU time is available, raising this to 18 gives the gate more cosine anneal room.
+epochs: 12
+checkpoint_frequency: 4
 batch_size: 8
 accum_steps: 4            # effective batch 32
 dropout: 0.0
@@ -78,13 +81,28 @@ gt_2d: False
 test_multiclip: False
 # data_stride_test: 81
 
-# Loss — identical to the best BFS objective. Bone loss (lg/lv) and diff are OFF: they
-# degraded MPJPE in earlier runs (42.95 -> 43.6). Do not change the objective mid-fine-tune.
+# Loss — anatomy-aware six-term objective, matched to the thesis methodology.
+# Core MotionBERT/PoseMamba terms (these alone gave the 41.8 native model):
+#   lambda_3d           MPJPE (primary position error)
+#   lambda_scale        n-MPJPE (scale-invariant, "Protocol-2"-style)
+#   lambda_3d_velocity  temporal smoothness (PoseMamba's key term, weight 20)
+# Kinematic bone terms turned ON for the FUSED run (they were OFF in the replace-scan
+# runs where a saturated ~43mm model made them hurt; here the native branch is preserved
+# bit-for-bit and only the gated BFS kinematic-tree residual moves, so bone supervision
+# shapes exactly the branch that models parent->child limb structure — lowest-risk place
+# to add it, and it targets the occlusion-heavy actions where limb lengths collapse):
+#   lambda_lv  limb-length TEMPORAL VARIANCE (self-consistency, needs no GT, rarely
+#              fights MPJPE) — the primary, safest new term. = thesis lambda_bvar.
+#   lambda_lg  limb-length vs GT (anatomically-correct bone lengths) — modest weight;
+#              this is the term that CAN trade against MPJPE, so keep it small. = thesis lambda_bone.
+# Angle losses (a/av) stay OFF: most likely to fight MPJPE in a short fine-tune.
+# If per-epoch MPJPE rises above the 41.87 floor and stays there, drop lambda_lg to 0.0
+# first (keep lambda_lv); loss_limb_gt is the only term here that pulls against MPJPE.
 lambda_3d: 1.0
 lambda_3d_velocity: 20.0
 lambda_scale: 0.5
-lambda_lv: 0.0
-lambda_lg: 0.0
+lambda_lv: 1.0
+lambda_lg: 0.5
 lambda_a: 0.0
 lambda_av: 0.0
 lambda_3dw: 0.0
