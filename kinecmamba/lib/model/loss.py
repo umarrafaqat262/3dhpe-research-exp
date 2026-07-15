@@ -132,6 +132,30 @@ def loss_limb_gt(x, gt):
     limb_lens_gt = get_limb_lens(gt) # (N, T, 16)
     return nn.L1Loss()(limb_lens_x, limb_lens_gt)
 
+# Left/right symmetric bone pairs, as indices into get_limb_lens output (limbs_id order):
+#   limbs_id = [[0,1],[1,2],[2,3],  [0,4],[4,5],[5,6],  [0,7],[7,8],[8,9],[9,10],
+#               [8,11],[11,12],[12,13],  [8,14],[14,15],[15,16]]
+#   idx:         0     1     2       3     4     5       6    7    8    9
+#               10     11      12       13     14      15
+# Right side: pelvis-hip 0, thigh 1, shin 2, clavicle 13, upperarm 14, forearm 15.
+# Left  side: pelvis-hip 3, thigh 4, shin 5, clavicle 10, upperarm 11, forearm 12.
+_SYM_LEFT  = [3, 4, 5, 10, 11, 12]
+_SYM_RIGHT = [0, 1, 2, 13, 14, 15]
+
+def loss_limb_symmetry(x):
+    '''
+    Left/right bone-length symmetry prior. A human skeleton is bilaterally symmetric
+    (left femur == right femur, etc.), so the corresponding left/right bone lengths of a
+    prediction should match. This is a self-consistency prior (no ground truth needed):
+    when one side is occluded and predicted poorly, matching it to the visible mirror side
+    regularizes the hidden limb. Addresses occlusion WITHOUT any data augmentation.
+        Input: (N, T, 17, 3)  ->  scalar
+    '''
+    limb_lens = get_limb_lens(x)                        # (N, T, 16)
+    left  = limb_lens[..., _SYM_LEFT]                   # (N, T, 6)
+    right = limb_lens[..., _SYM_RIGHT]                  # (N, T, 6)
+    return torch.mean(torch.abs(left - right))
+
 def loss_velocity(predicted, target):
     """
     Mean per-joint velocity error (i.e. mean Euclidean distance of the 1st derivative)

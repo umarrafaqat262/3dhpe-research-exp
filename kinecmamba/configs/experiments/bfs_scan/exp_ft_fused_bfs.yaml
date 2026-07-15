@@ -107,6 +107,11 @@ lambda_a: 0.0
 lambda_av: 0.0
 lambda_3dw: 0.0
 lambda_diff: 0.0
+# Left/right bone-length symmetry prior — the augmentation-free occlusion regularizer.
+# When one side is occluded (SittingDown/Sitting/Photo), matching the hidden limb's bone
+# lengths to its visible mirror stabilizes the prediction. Self-consistency term (no GT),
+# so it does not fight MPJPE on clean joints. Modest weight; drop to 0 only if MPJPE rises.
+lambda_sym: 0.5
 
 # Augmentation
 synthetic: False

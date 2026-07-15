@@ -86,14 +86,21 @@ python train.py \
 Recipe (already in the yaml): **12 epochs** (~6-7h at ~30-35 min/epoch), cosine -> 0 with 2-epoch
 warmup, **base LR 2e-5**, **gate LR 2e-3 (100x)**, grad-clip 1.0, EMA 0.999.
 
-**Objective — anatomy-aware six-term loss (matched to the thesis methodology):**
+**Objective — anatomy-aware loss (occlusion priors, no augmentation):**
 MPJPE (1.0) + n-MPJPE/scale (0.5) + velocity (20.0) + **limb-length temporal variance
-`lambda_lv` (1.0)** + **limb-length vs GT `lambda_lg` (0.5)**. The two bone terms are ON here (they
-were OFF in the old replace-scan runs, where a saturated ~43mm model made them hurt). In the fused
-run the native branch is preserved bit-for-bit and only the gated BFS kinematic-tree residual
-moves, so bone supervision shapes exactly the branch that models parent->child limb structure —
-the lowest-risk place to add it, and it targets the occlusion-heavy actions (SittingDown, Sitting,
-Photo) where limb lengths collapse. Angle losses stay off.
+`lambda_lv` (1.0)** + **limb-length vs GT `lambda_lg` (0.5)** + **left/right bone-length symmetry
+`lambda_sym` (0.5)**. The bone terms are ON here (they were OFF in the old replace-scan runs, where
+a saturated ~43mm model made them hurt). In the fused run the native branch is preserved
+bit-for-bit and only the gated BFS kinematic-tree residual moves, so bone supervision shapes
+exactly the branch that models parent->child limb structure.
+
+Why this targets occlusion **without augmentation**: the worst PoseMamba actions are self-occlusion
+heavy (SittingDown 63.4mm, Sitting 53.1mm, Photo 52.7mm), where a hidden limb's 2D detection is
+unreliable and its 3D lift degenerates. The symmetry term enforces that a hidden limb's bone
+lengths match its **visible mirror** (a human skeleton is bilaterally symmetric), and the variance
+term keeps bone lengths **temporally stable**, so an occluded joint is regularized by structure
+rather than by fabricating extra training data. These are self-consistency priors — they do not
+fight MPJPE on cleanly-visible joints. Angle losses stay off.
 
 Do **not** pass `-r/--resume` (it fast-forwards the epoch counter).
 
